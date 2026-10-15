@@ -1,9 +1,11 @@
+from datetime import timedelta
+
 import pytest
 import responses
 from celery.exceptions import Retry
+from django.utils import timezone
 
 from leadhook.destinations.models import Delivery
-from leadhook.destinations.services import attempt_delivery
 from leadhook.destinations.tasks import deliver, route_lead
 from leadhook.leads.models import Lead
 from tests.factories import make_destination, make_lead
@@ -81,12 +83,53 @@ def test_route_lead_redispatches_pending_deliveries_of_routed_lead():
 
 
 @responses.activate
-def test_deliver_does_not_send_when_attempt_already_claimed():
+def test_deliver_skips_delivery_leased_by_another_worker():
     responses.post(HOOK, json={})
     delivery = _pending_delivery()
-    Delivery.objects.filter(pk=delivery.pk).update(attempts=1)  # another worker claimed it
-    result = attempt_delivery(delivery)  # stale in-memory attempts == 0
-    assert result.outcome == "skip"
+    Delivery.objects.filter(pk=delivery.pk).update(
+        attempts=1, locked_until=timezone.now() + timedelta(seconds=60)
+    )
+    deliver(delivery.pk)
     assert len(responses.calls) == 0
     delivery.refresh_from_db()
     assert delivery.attempts == 1
+
+
+@responses.activate
+def test_expired_lease_can_be_reclaimed():
+    responses.post(HOOK, json={})
+    delivery = _pending_delivery()
+    Delivery.objects.filter(pk=delivery.pk).update(
+        attempts=1, locked_until=timezone.now() - timedelta(seconds=1)
+    )
+    deliver(delivery.pk)
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.SUCCESS
+    assert delivery.attempts == 2
+    assert delivery.locked_until is None
+
+
+@responses.activate
+def test_deliver_and_route_lead_leave_deliveries_waiting_for_retry_alone():
+    responses.post(HOOK, json={})
+    delivery = _pending_delivery()
+    Delivery.objects.filter(pk=delivery.pk).update(
+        attempts=1, next_retry_at=timezone.now() + timedelta(seconds=300)
+    )
+    delivery.lead.page.default_destinations.add(delivery.destination)
+    deliver(delivery.pk)
+    route_lead(delivery.lead.pk)
+    assert len(responses.calls) == 0
+    delivery.refresh_from_db()
+    assert delivery.attempts == 1
+
+
+@responses.activate
+def test_retry_releases_lease_and_sets_next_retry_at():
+    responses.post(HOOK, status=503)
+    delivery = _pending_delivery()
+    with pytest.raises(Retry):
+        deliver(delivery.pk)
+    delivery.refresh_from_db()
+    assert delivery.locked_until is None
+    assert delivery.next_retry_at is not None
