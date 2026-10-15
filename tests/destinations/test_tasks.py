@@ -3,6 +3,7 @@ import responses
 from celery.exceptions import Retry
 
 from leadhook.destinations.models import Delivery
+from leadhook.destinations.services import attempt_delivery
 from leadhook.destinations.tasks import deliver, route_lead
 from leadhook.leads.models import Lead
 from tests.factories import make_destination, make_lead
@@ -66,3 +67,26 @@ def test_deliver_ignores_non_pending_deliveries():
     deliver(delivery.pk)  # no HTTP mock registered: would raise if it tried to send
     delivery.refresh_from_db()
     assert delivery.attempts == 0
+
+
+@responses.activate
+def test_route_lead_redispatches_pending_deliveries_of_routed_lead():
+    responses.post(HOOK, json={})
+    delivery = _pending_delivery()
+    delivery.lead.page.default_destinations.add(delivery.destination)
+    route_lead(delivery.lead.pk)
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.SUCCESS
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_deliver_does_not_send_when_attempt_already_claimed():
+    responses.post(HOOK, json={})
+    delivery = _pending_delivery()
+    Delivery.objects.filter(pk=delivery.pk).update(attempts=1)  # another worker claimed it
+    result = attempt_delivery(delivery)  # stale in-memory attempts == 0
+    assert result.outcome == "skip"
+    assert len(responses.calls) == 0
+    delivery.refresh_from_db()
+    assert delivery.attempts == 1
