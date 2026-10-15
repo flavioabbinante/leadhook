@@ -122,12 +122,17 @@ def test_refresh_lead_status():
 def test_reset_for_resend():
     delivery = _delivery()
     mark_delivery_failed(delivery, "HTTP 404")
+    Delivery.objects.filter(pk=delivery.pk).update(
+        next_retry_at=NOW, locked_until=NOW + timedelta(seconds=60)
+    )
+    delivery.refresh_from_db()
     delivery.lead.status = Lead.Status.FAILED
     delivery.lead.save()
     reset_for_resend(delivery)
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.PENDING
     assert delivery.next_retry_at is None
+    assert delivery.locked_until is None
     assert delivery.lead.status == Lead.Status.ROUTED
 
 
@@ -144,3 +149,11 @@ def test_refresh_lead_status_ignores_stale_in_memory_status():
     Lead.objects.filter(pk=lead.pk).update(status=Lead.Status.ROUTED)
     refresh_lead_status(lead)
     assert Lead.objects.get(pk=lead.pk).status == Lead.Status.DELIVERED
+
+
+def test_create_deliveries_does_not_downgrade_finished_lead():
+    lead = make_lead(status=Lead.Status.DELIVERED)
+    lead.page.default_destinations.add(make_destination())
+    create_deliveries(lead)
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.DELIVERED
