@@ -86,3 +86,10 @@ def test_fetch_lead_skips_leads_already_fetched():
     with mock.patch("leadhook.leads.tasks.fetch_lead_details") as fetch:
         fetch_lead(lead.pk)
     fetch.assert_not_called()
+
+
+def test_process_event_redispatches_fetch_for_existing_received_lead():
+    Lead.objects.create(leadgen_id="333", page_external_id="111", form_external_id="222")
+    with mock.patch("leadhook.leads.tasks.fetch_lead.delay") as delay:
+        process_event(_event().pk)
+    delay.assert_called_once()
