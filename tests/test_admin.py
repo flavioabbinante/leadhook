@@ -1,9 +1,12 @@
+from datetime import timedelta
 from unittest import mock
 
+from django.contrib.messages import get_messages
 from django.urls import reverse
+from django.utils import timezone
 
 from leadhook.destinations.models import Delivery, Destination
-from leadhook.leads.models import Lead
+from leadhook.leads.models import Lead, WebhookEvent
 from leadhook.meta.models import MetaApp
 from tests.factories import make_destination, make_lead, make_meta_app
 
@@ -129,6 +132,16 @@ def test_reprocess_action_dispatches_by_status(admin_client):
     route.assert_called_once_with(unrouted.pk)
 
 
+def test_reprocess_action_redispatches_routed_leads(admin_client):
+    routed = make_lead(status=Lead.Status.ROUTED)
+    with mock.patch("leadhook.leads.admin.route_lead.delay") as route:
+        admin_client.post(
+            reverse("admin:leads_lead_changelist"),
+            {"action": "reprocess", "_selected_action": [str(routed.pk)]},
+        )
+    route.assert_called_once_with(routed.pk)
+
+
 def test_destination_form_validates_auth(admin_client):
     response = admin_client.post(
         reverse("admin:destinations_destination_add"),
@@ -149,3 +162,56 @@ def test_destination_form_validates_auth(admin_client):
     )
     assert response.status_code == 200
     assert "Required for the selected authentication." in response.content.decode()
+
+
+def test_resend_action_skips_deliveries_in_progress_or_scheduled(admin_client):
+    lead = make_lead(status=Lead.Status.PARTIALLY_FAILED)
+    failed = Delivery.objects.create(
+        lead=lead, destination=make_destination(name="a"), status=Delivery.Status.FAILED
+    )
+    succeeded = Delivery.objects.create(
+        lead=lead, destination=make_destination(name="b"), status=Delivery.Status.SUCCESS
+    )
+    lease = timezone.now() + timedelta(seconds=60)
+    in_flight = Delivery.objects.create(
+        lead=lead, destination=make_destination(name="c"), attempts=1, locked_until=lease
+    )
+    with mock.patch("leadhook.destinations.admin.deliver.delay") as delay:
+        response = admin_client.post(
+            reverse("admin:destinations_delivery_changelist"),
+            {
+                "action": "resend",
+                "_selected_action": [str(failed.pk), str(succeeded.pk), str(in_flight.pk)],
+            },
+        )
+    assert sorted(c.args[0] for c in delay.call_args_list) == sorted([failed.pk, succeeded.pk])
+    in_flight.refresh_from_db()
+    assert in_flight.locked_until == lease
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any(
+        "2 deliveries queued" in m and "1 skipped" in m and "already in progress or scheduled" in m
+        for m in messages
+    )
+
+
+def test_process_events_action(admin_client):
+    pending = WebhookEvent.objects.create(payload={}, signature_ok=True)
+    done = WebhookEvent.objects.create(payload={}, signature_ok=True, processed_at=timezone.now())
+    unsigned = WebhookEvent.objects.create(payload={}, signature_ok=False)
+    with mock.patch("leadhook.leads.admin.process_event.delay") as delay:
+        response = admin_client.post(
+            reverse("admin:leads_webhookevent_changelist"),
+            {
+                "action": "process_events",
+                "_selected_action": [str(pending.pk), str(done.pk), str(unsigned.pk)],
+            },
+        )
+    delay.assert_called_once_with(pending.pk)
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert any("1 event(s) queued" in m and "2 skipped" in m for m in messages)
+
+
+def test_destination_extra_headers_help_warns_about_clear_text(admin_client):
+    content = admin_client.get(reverse("admin:destinations_destination_add")).content.decode()
+    assert "Stored in clear text" in content
+    assert "put credentials in Secret, not here" in content
