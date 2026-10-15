@@ -83,4 +83,6 @@ class GraphClient:
 
 
 def client_for_page(page: Page) -> GraphClient:
-    return GraphClient(page.meta_app.graph_version, page.page_token)
+    """Use the page's own token, or the Meta app's System User token when it has none."""
+    token = page.page_token or page.meta_app.access_token
+    return GraphClient(page.meta_app.graph_version, token)

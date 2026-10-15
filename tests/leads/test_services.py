@@ -104,3 +104,26 @@ def test_transient_error_asks_for_retry():
     assert fetch_lead_details(lead) == FetchOutcome.RETRY
     lead.refresh_from_db()
     assert lead.error == "Oops"
+
+
+@responses.activate
+def test_long_meta_names_are_truncated_to_field_length():
+    make_page()
+    long_name = "n" * 300
+    responses.get(
+        f"{BASE}/333",
+        json={
+            **GRAPH_LEAD,
+            "ad_name": long_name,
+            "adset_name": long_name,
+            "campaign_name": long_name,
+        },
+    )
+    responses.get(f"{BASE}/222", json={**GRAPH_FORM, "name": long_name})
+    lead = _received_lead()
+    assert fetch_lead_details(lead) == FetchOutcome.DONE
+    lead.refresh_from_db()
+    assert lead.ad_name == "n" * 255
+    assert lead.adset_name == "n" * 255
+    assert lead.campaign_name == "n" * 255
+    assert Form.objects.get(form_id="222").name == "n" * 255

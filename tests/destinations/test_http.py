@@ -242,3 +242,7 @@ def test_blocked_message_does_not_leak_credentials_or_path(fake_dns):
     with pytest.raises(BlockedDestination) as info:
         check_destination_url("ftp://user:s3cret@example.com/x")
     assert "s3cret" not in str(info.value)
+
+
+def test_parse_retry_after_with_huge_number_is_capped():
+    assert parse_retry_after("9" * 5000) == 86400

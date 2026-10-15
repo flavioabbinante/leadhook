@@ -21,6 +21,8 @@ from .templating import TemplateError, evaluate_condition
 RESPONSE_BODY_LIMIT = 4096
 RETRYABLE_STATUS_CODES = {408, 429}
 MAX_RETRY_AFTER = 86400
+# Longer digit strings are far above MAX_RETRY_AFTER anyway (and int() rejects > 4300 digits).
+MAX_RETRY_AFTER_DIGITS = 10
 
 
 @dataclass
@@ -101,6 +103,8 @@ def parse_retry_after(value: str | None) -> int | None:
         return None
     value = value.strip()
     if re.fullmatch(r"\d+", value, re.ASCII):
+        if len(value.lstrip("0")) > MAX_RETRY_AFTER_DIGITS:
+            return MAX_RETRY_AFTER
         return min(int(value), MAX_RETRY_AFTER)
     try:
         moment = parsedate_to_datetime(value)

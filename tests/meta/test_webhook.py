@@ -154,3 +154,13 @@ def test_broker_failure_still_returns_200(client, django_capture_on_commit_callb
             )
     assert response.status_code == 200
     assert WebhookEvent.objects.get().processed_at is None
+
+
+def test_lone_surrogates_are_replaced_in_payload(client):
+    app = make_meta_app()
+    body = b'{"a": ["x\\ud800y"], "k\\udfff": "\\ud83d\\ude00"}'
+    response = client.post(
+        _url(app), data=body, content_type="application/json", HTTP_X_HUB_SIGNATURE_256=sign(body)
+    )
+    assert response.status_code == 200
+    assert WebhookEvent.objects.get().payload == {"a": ["x�y"], "k�": "\U0001f600"}

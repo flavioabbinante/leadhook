@@ -1,6 +1,7 @@
 import hmac
 import json
 import logging
+import re
 
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
@@ -17,16 +18,22 @@ from .signature import verify_signature
 logger = logging.getLogger(__name__)
 
 MAX_STORED_UNPARSEABLE_BODY = 10_000
+# json.loads joins valid surrogate pairs, so any surrogate left in a string is unpaired.
+LONE_SURROGATE = re.compile("[\ud800-\udfff]")
 
 
-def _strip_nul(value):
-    """PostgreSQL JSONB rejects U+0000; remove it from all strings and keys."""
+def _clean_strings(value):
+    """Make every string and key storable in PostgreSQL JSONB.
+
+    U+0000 is removed and lone UTF-16 surrogates (e.g. "\\ud800" in the JSON) are replaced
+    with U+FFFD; PostgreSQL rejects both.
+    """
     if isinstance(value, str):
-        return value.replace("\u0000", "")
+        return LONE_SURROGATE.sub("\ufffd", value.replace("\u0000", ""))
     if isinstance(value, list):
-        return [_strip_nul(item) for item in value]
+        return [_clean_strings(item) for item in value]
     if isinstance(value, dict):
-        return {_strip_nul(key): _strip_nul(item) for key, item in value.items()}
+        return {_clean_strings(key): _clean_strings(item) for key, item in value.items()}
     return value
 
 
@@ -61,12 +68,12 @@ def meta_webhook(request: HttpRequest, webhook_uuid) -> HttpResponse:
         payload = None
     if not isinstance(payload, dict):
         payload = {
-            "unparseable_body": _strip_nul(
+            "unparseable_body": _clean_strings(
                 raw_body.decode("utf-8", "replace")[:MAX_STORED_UNPARSEABLE_BODY]
             )
         }
     else:
-        payload = _strip_nul(payload)
+        payload = _clean_strings(payload)
 
     event = WebhookEvent.objects.create(
         meta_app=meta_app,

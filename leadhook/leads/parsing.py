@@ -25,7 +25,9 @@ def extract_leadgen_changes(payload: dict) -> list[LeadgenChange]:
         for change in entry.get("changes") or []:
             if not isinstance(change, dict) or change.get("field") != "leadgen":
                 continue
-            value = change.get("value") or {}
+            value = change.get("value")
+            if not isinstance(value, dict):
+                continue
             leadgen_id = value.get("leadgen_id")
             if not leadgen_id:
                 continue

@@ -65,3 +65,55 @@ def test_destination_clean_rejects_non_object_extra_headers():
     with pytest.raises(ValidationError) as excinfo:
         destination.clean()
     assert "extra_headers" in excinfo.value.message_dict
+
+
+@pytest.mark.parametrize(
+    ("changes", "error_field"),
+    [
+        ({"extra_headers": {"X-Name": "caf€"}}, "extra_headers"),
+        ({"extra_headers": {"X-Näme€": "v"}}, "extra_headers"),
+        ({"extra_headers": {"X-Name": "a\r\nInjected: 1"}}, "extra_headers"),
+        ({"extra_headers": {"X-Na\nme": "v"}}, "extra_headers"),
+        ({"extra_headers": {"": "v"}}, "extra_headers"),
+        (
+            {"auth_type": Destination.AuthType.HEADER, "auth_header_name": "X-K€", "secret": "s"},
+            "auth_header_name",
+        ),
+        (
+            {
+                "auth_type": Destination.AuthType.HEADER,
+                "auth_header_name": "X-K\r\n",
+                "secret": "s",
+            },
+            "auth_header_name",
+        ),
+        ({"auth_type": Destination.AuthType.BEARER, "secret": "t€ken"}, "secret"),
+        ({"auth_type": Destination.AuthType.BEARER, "secret": "tok\nen"}, "secret"),
+    ],
+)
+def test_destination_clean_rejects_unsendable_headers(changes, error_field):
+    destination = Destination(name="x", url="https://a.example.com", **changes)
+    with pytest.raises(ValidationError) as excinfo:
+        destination.clean()
+    assert error_field in excinfo.value.message_dict
+    assert "€" not in str(excinfo.value.message_dict.get("secret", ""))
+
+
+def test_destination_clean_accepts_latin1_headers():
+    destination = Destination(
+        name="x",
+        url="https://a.example.com",
+        auth_type=Destination.AuthType.HEADER,
+        auth_header_name="X-Key",
+        secret="sécret",
+        extra_headers={"X-Source": "café", "X-Count": 3},
+    )
+    destination.clean()
+
+
+@pytest.mark.parametrize("timeout", [0, 121])
+def test_destination_timeout_must_be_between_1_and_120(timeout):
+    destination = make_destination(timeout_s=timeout)
+    with pytest.raises(ValidationError) as excinfo:
+        destination.full_clean()
+    assert "timeout_s" in excinfo.value.message_dict
