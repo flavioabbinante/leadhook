@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import environ
+from cryptography.fernet import Fernet
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,12 +15,20 @@ environ.Env.read_env(os.environ.get("LEADHOOK_ENV_FILE", str(BASE_DIR / ".env"))
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 
+_FERNET_KEY_HINT = (
+    "Generate one with: python -c "
+    '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+)
 LEADHOOK_ENCRYPTION_KEY = env("LEADHOOK_ENCRYPTION_KEY", default="")
 if not LEADHOOK_ENCRYPTION_KEY:
+    raise ImproperlyConfigured(f"LEADHOOK_ENCRYPTION_KEY is not set. {_FERNET_KEY_HINT}")
+try:
+    Fernet(LEADHOOK_ENCRYPTION_KEY.encode())
+except (ValueError, TypeError):
     raise ImproperlyConfigured(
-        "LEADHOOK_ENCRYPTION_KEY is not set. Generate one with: python -c "
-        '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
-    )
+        "LEADHOOK_ENCRYPTION_KEY is not a valid Fernet key (32 url-safe base64-encoded bytes). "
+        f"{_FERNET_KEY_HINT}"
+    ) from None
 
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://localhost:8000").rstrip("/")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
@@ -103,7 +112,7 @@ CELERY_BROKER_URL = env("REDIS_URL", default="redis://localhost:6379/0")
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_IGNORE_RESULT = True
-# Retries are scheduled up to 24 h ahead; Redis must not redeliver them before that.
+# A retry is scheduled at most 24 h ahead; Redis must not redeliver it before that.
 CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 26 * 3600}
 
 META_GRAPH_VERSION = env("META_GRAPH_VERSION", default="v26.0")
