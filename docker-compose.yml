@@ -1,0 +1,49 @@
+x-app: &app
+  build: .
+  image: leadhook:local
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://leadhook:leadhook@postgres:5432/leadhook
+    REDIS_URL: redis://redis:6379/0
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+  restart: unless-stopped
+
+services:
+  web:
+    <<: *app
+    command: web
+    ports:
+      - "8000:8000"
+  worker:
+    <<: *app
+    command: worker
+  beat:
+    <<: *app
+    command: beat
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: leadhook
+      POSTGRES_PASSWORD: leadhook
+      POSTGRES_DB: leadhook
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadhook"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
