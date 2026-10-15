@@ -1,0 +1,40 @@
+[project]
+name = "leadhook"
+version = "0.1.0"
+description = "Self-hosted router from Facebook Lead Ads to webhooks"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "AGPL-3.0-only"
+dependencies = [
+    "django>=5.2,<6.0",
+    "celery[redis]>=5.4,<6.0",
+    "django-environ>=0.11",
+    "cryptography>=43,<48",
+    "requests>=2.32",
+    "jinja2>=3.1",
+    "psycopg[binary]>=3.2",
+    "gunicorn>=23",
+    "whitenoise>=6.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-django>=4.9",
+    "responses>=0.25",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["**/migrations/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
