@@ -23,7 +23,11 @@ def receiver():
         def do_POST(self):
             body = self.rfile.read(int(self.headers["Content-Length"]))
             received.append(
-                {"headers": {k.lower(): v for k, v in self.headers.items()}, "raw": body, "json": json.loads(body)}
+                {
+                    "headers": {k.lower(): v for k, v in self.headers.items()},
+                    "raw": body,
+                    "json": json.loads(body),
+                }
             )
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -80,7 +84,8 @@ def test_end_to_end_lead_delivery(client, setup, django_capture_on_commit_callba
     assert payload["_leadhook"]["attempt"] == 1
 
     timestamp = request["headers"]["x-leadhook-timestamp"]
-    expected = hmac.new(b"hmac-key", f"{timestamp}.".encode() + request["raw"], hashlib.sha256).hexdigest()
+    signed = f"{timestamp}.".encode() + request["raw"]
+    expected = hmac.new(b"hmac-key", signed, hashlib.sha256).hexdigest()
     assert request["headers"]["x-leadhook-signature"] == f"sha256={expected}"
     assert request["headers"]["idempotency-key"] == "333"
 
