@@ -9,4 +9,4 @@ def verify_signature(app_secret: str, raw_body: bytes, header: str | None) -> bo
     if not header or not header.startswith(PREFIX):
         return False
     expected = hmac.new(app_secret.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected.encode(), header[len(PREFIX):].encode())
+    return hmac.compare_digest(expected.encode(), header[len(PREFIX) :].encode())

@@ -143,7 +143,12 @@ def test_private_addresses_are_blocked(fake_dns):
     fake_dns["internal.test"] = "10.0.0.5"
     with pytest.raises(BlockedDestination):
         check_destination_url("https://internal.test/hook")
-    urls = ["http://127.0.0.1/", "http://169.254.169.254/latest", "http://[::1]/", "http://192.168.1.10/"]
+    urls = [
+        "http://127.0.0.1/",
+        "http://169.254.169.254/latest",
+        "http://[::1]/",
+        "http://192.168.1.10/",
+    ]
     for url in urls:
         with pytest.raises(BlockedDestination):
             check_destination_url(url)
