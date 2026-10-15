@@ -3,7 +3,8 @@ import os
 os.environ["DJANGO_SECRET_KEY"] = "test-secret-key"
 os.environ["LEADHOOK_ENCRYPTION_KEY"] = "bGVhZGhvb2stdGVzdC1rZXktMDEyMzQ1Njc4OWFiY2Q="
 os.environ["LEADHOOK_ENV_FILE"] = os.devnull
-os.environ["DATABASE_URL"] = "sqlite://:memory:"
+# CI runs the suite against PostgreSQL by setting LEADHOOK_TEST_DATABASE_URL.
+os.environ["DATABASE_URL"] = os.environ.get("LEADHOOK_TEST_DATABASE_URL") or "sqlite://:memory:"
 
 from leadhook.settings import *  # noqa: E402,F403
 
