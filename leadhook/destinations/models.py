@@ -82,6 +82,8 @@ class Delivery(models.Model):
     )
     attempts = models.PositiveIntegerField(default=0)
     next_retry_at = models.DateTimeField(null=True, blank=True)
+    # Lease held by the worker currently sending; a crashed worker's lease simply expires.
+    locked_until = models.DateTimeField(null=True, blank=True)
     last_status_code = models.PositiveIntegerField(null=True, blank=True)
     last_error = models.TextField(blank=True)
     request_body = models.TextField(blank=True)
