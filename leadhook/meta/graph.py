@@ -33,7 +33,12 @@ class GraphError(Exception):
     def is_transient(self) -> bool:
         if self.is_token_error:
             return False
-        return self.status is None or self.status >= 500 or self.code in TRANSIENT_ERROR_CODES
+        return (
+            self.status is None
+            or self.status >= 500
+            or self.status == 429
+            or self.code in TRANSIENT_ERROR_CODES
+        )
 
 
 class GraphClient:

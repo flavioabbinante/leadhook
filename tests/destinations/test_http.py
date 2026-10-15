@@ -179,3 +179,61 @@ def test_parse_retry_after():
     assert parse_retry_after("soon") is None
     future = datetime.now(UTC) + timedelta(minutes=10)
     assert 590 <= parse_retry_after(format_datetime(future, usegmt=True)) <= 600
+
+
+@responses.activate
+def test_proxy_environment_is_ignored(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    seen = []
+    original = requests.Session.__init__
+
+    def spy(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        seen.append(self)
+
+    monkeypatch.setattr(requests.Session, "__init__", spy)
+    responses.post(URL, json={"ok": True})
+    assert send_request(make_destination(), "{}", HEADERS).outcome == "success"
+    assert seen
+    assert all(session.trust_env is False for session in seen)
+
+
+def test_parse_retry_after_rejects_non_ascii_digits():
+    assert parse_retry_after("²") is None
+    assert parse_retry_after("١٢") is None
+
+
+def test_parse_retry_after_naive_date_is_utc_and_far_future_is_capped():
+    assert parse_retry_after("Wed, 21 Oct 2015 07:28:00 -0000") == 0
+    assert parse_retry_after("Fri, 01 Jan 2100 00:00:00 GMT") == 86400
+    assert parse_retry_after("99999999") == 86400
+
+
+def test_invalid_port_fails_without_raising():
+    result = send_request(make_destination(url="https://example.com:99999/"), "{}", HEADERS)
+    assert result.outcome == "fail"
+    assert "Invalid destination URL" in result.error
+
+
+def test_bad_idna_host_fails_without_raising(monkeypatch):
+    def resolve(host, port):
+        raise UnicodeError("label too long")
+
+    monkeypatch.setattr("leadhook.destinations.http.resolve_host", resolve)
+    result = send_request(make_destination(url="https://bad.example/"), "{}", HEADERS)
+    assert result.outcome == "fail"
+    assert "Invalid destination host" in result.error
+
+
+def test_blocked_message_does_not_leak_credentials_or_path(fake_dns):
+    fake_dns["internal.test"] = "10.0.0.5"
+    url = "https://user:s3cret@internal.test/hook?token=abc"
+    result = send_request(make_destination(url=url), "{}", HEADERS)
+    assert result.outcome == "fail"
+    assert "non-public" in result.error
+    assert "s3cret" not in result.error
+    assert "token=abc" not in result.error
+    with pytest.raises(BlockedDestination) as info:
+        check_destination_url("ftp://user:s3cret@example.com/x")
+    assert "s3cret" not in str(info.value)
