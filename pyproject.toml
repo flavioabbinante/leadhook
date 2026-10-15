@@ -30,6 +30,9 @@ DJANGO_SETTINGS_MODULE = "tests.settings"
 pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+filterwarnings = [
+    "ignore:The default scheme will be changed from 'http' to 'https' in Django 6.0:django.utils.deprecation.RemovedInDjango60Warning",
+]
 
 [tool.ruff]
 line-length = 100
