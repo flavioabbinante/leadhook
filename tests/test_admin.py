@@ -13,8 +13,13 @@ def test_admin_pages_render(admin_client):
     destination = make_destination()
     Delivery.objects.create(lead=lead, destination=destination)
     for name in [
-        "meta_metaapp", "meta_page", "meta_form", "leads_lead", "leads_webhookevent",
-        "destinations_destination", "destinations_delivery",
+        "meta_metaapp",
+        "meta_page",
+        "meta_form",
+        "leads_lead",
+        "leads_webhookevent",
+        "destinations_destination",
+        "destinations_delivery",
     ]:
         assert admin_client.get(reverse(f"admin:{name}_changelist")).status_code == 200
         assert admin_client.get(reverse(f"admin:{name}_add")).status_code in (200, 403)
@@ -128,10 +133,18 @@ def test_destination_form_validates_auth(admin_client):
     response = admin_client.post(
         reverse("admin:destinations_destination_add"),
         {
-            "name": "x", "kind": "webhook", "url": "https://a.example.com", "method": "POST",
-            "auth_type": Destination.AuthType.BEARER, "auth_header_name": "", "secret": "",
-            "extra_headers": "{}", "payload_template": "", "success_condition": "",
-            "timeout_s": "15", "active": "on",
+            "name": "x",
+            "kind": "webhook",
+            "url": "https://a.example.com",
+            "method": "POST",
+            "auth_type": Destination.AuthType.BEARER,
+            "auth_header_name": "",
+            "secret": "",
+            "extra_headers": "{}",
+            "payload_template": "",
+            "success_condition": "",
+            "timeout_s": "15",
+            "active": "on",
         },
     )
     assert response.status_code == 200

@@ -43,7 +43,7 @@ def _phone_strip_prefix(value, prefix: str) -> str:
         prefixes.append("00" + prefix[1:])
     for candidate in prefixes:
         if number.startswith(candidate):
-            return number[len(candidate):]
+            return number[len(candidate) :]
     return number
 
 

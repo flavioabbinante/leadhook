@@ -67,8 +67,13 @@ class DestinationAdmin(admin.ModelAdmin):
 @admin.register(Delivery)
 class DeliveryAdmin(admin.ModelAdmin):
     list_display = (
-        "lead", "destination", "status", "attempts", "last_status_code",
-        "next_retry_at", "updated_at",
+        "lead",
+        "destination",
+        "status",
+        "attempts",
+        "last_status_code",
+        "next_retry_at",
+        "updated_at",
     )
     list_filter = ("status", "destination")
     search_fields = ("lead__leadgen_id",)

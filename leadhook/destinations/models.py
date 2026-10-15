@@ -20,9 +20,7 @@ class Destination(models.Model):
         BEARER = "bearer", "Bearer token"
         HMAC = "hmac", "HMAC signature"
 
-    workspace = models.ForeignKey(
-        Workspace, on_delete=models.CASCADE, related_name="destinations"
-    )
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="destinations")
     name = models.CharField(max_length=200)
     kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.WEBHOOK)
     url = models.URLField("URL", max_length=2000)

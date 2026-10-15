@@ -49,8 +49,11 @@ def test_page_and_form_destination_links():
 )
 def test_destination_clean_requires_auth_details(auth_type, header_name, secret, error_field):
     destination = Destination(
-        name="x", url="https://a.example.com", auth_type=auth_type,
-        auth_header_name=header_name, secret=secret,
+        name="x",
+        url="https://a.example.com",
+        auth_type=auth_type,
+        auth_header_name=header_name,
+        secret=secret,
     )
     with pytest.raises(ValidationError) as excinfo:
         destination.clean()
