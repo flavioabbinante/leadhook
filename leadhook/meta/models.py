@@ -50,6 +50,12 @@ class Page(models.Model):
     last_checked_at = models.DateTimeField(null=True, blank=True)
     last_lead_at = models.DateTimeField(null=True, blank=True)
     error = models.TextField(blank=True)
+    default_destinations = models.ManyToManyField(
+        "destinations.Destination",
+        blank=True,
+        related_name="default_for_pages",
+        help_text="Used for forms of this page that have no destinations of their own.",
+    )
 
     def __str__(self) -> str:
         return f"{self.name or 'Page'} ({self.page_id})"
@@ -62,6 +68,12 @@ class Form(models.Model):
     locale = models.CharField(max_length=16, blank=True)
     status = models.CharField(max_length=32, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
+    destinations = models.ManyToManyField(
+        "destinations.Destination",
+        blank=True,
+        related_name="forms",
+        help_text="When set, these replace the page's default destinations for this form.",
+    )
 
     def __str__(self) -> str:
         return f"{self.name or 'Form'} ({self.form_id})"

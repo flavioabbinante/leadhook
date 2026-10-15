@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from leadhook.core.models import get_default_workspace
+from leadhook.destinations.models import Destination
 from leadhook.leads.models import Lead
 from leadhook.meta.models import Form, MetaApp, Page
 
@@ -64,3 +65,14 @@ def make_lead(form: Form | None = None, **kwargs) -> Lead:
     }
     values.update(kwargs)
     return Lead.objects.create(**values)
+
+
+def make_destination(**kwargs) -> Destination:
+    values = {
+        "workspace": get_default_workspace(),
+        "name": "n8n",
+        "url": "https://hooks.example.com/lead",
+        "auth_type": Destination.AuthType.NONE,
+    }
+    values.update(kwargs)
+    return Destination.objects.create(**values)
