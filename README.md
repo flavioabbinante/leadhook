@@ -10,13 +10,13 @@ Why: n8n's Facebook Lead Ads trigger can only hold one subscription per Meta app
 - Route by form, with a default per page; leads with no route are kept as *unrouted*, never lost.
 - Standard payload compatible with n8n's Facebook Lead Ads trigger, or your own JSON via sandboxed Jinja2 templates.
 - Bearer, custom header or HMAC-signed requests; optional success condition on the response body.
-- Automatic retries with backoff for up to 24 hours; one-click resend from the admin.
+- Automatic retries with backoff for about a day and a half (7 attempts); one-click resend from the admin.
 - Duplicate-proof: each lead is delivered once per destination, with an `Idempotency-Key` header.
 - Secrets encrypted at rest.
 
 ## Quick start
 
-Requirements: Docker with Compose, a public HTTPS URL pointing to port 8000 (reverse proxy such as Caddy, Traefik or nginx).
+Requirements: Docker with Compose, a public HTTPS URL served by a reverse proxy (Caddy, Traefik, nginx…) that forwards to port 8000. Compose publishes the web container on `127.0.0.1:8000` only, so it is reachable from the host (and the proxy) but not directly from the internet; keep it behind the proxy.
 
 ```bash
 git clone https://github.com/<you>/leadhook.git && cd leadhook
@@ -33,10 +33,10 @@ Open `https://<your-domain>/admin/`.
 1. In [Meta for Developers](https://developers.facebook.com/apps/) create an app of type **Business** and add the **Webhooks** product.
 2. In LeadHook, add a **Meta app** with the App ID and App secret. Copy the **Callback URL** and **Verify token** it shows.
 3. In Meta, Webhooks → **Page** → subscribe with that callback URL and verify token, then subscribe to the `leadgen` field.
-4. In Business Settings create a **System User**, assign it your pages, and generate a token with `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement` and `pages_manage_ads`. Paste it into the Meta app in LeadHook.
+4. In Business Settings create a **System User**, assign it your pages, and generate a token with `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement` and `pages_manage_ads`. Paste it into the Meta app in LeadHook. LeadHook uses this System User token for every page that has no page access token of its own.
 5. In Business Settings → Integrations → **Leads Access**, grant access to your app.
 6. Complete Business Verification and switch the app to **Live** — apps in development mode only receive test webhooks.
-7. For each page, add a **Page** in LeadHook with its page access token, and subscribe the page to your app:
+7. For each page, add a **Page** in LeadHook (the page access token is optional when the System User token covers the page), and subscribe the page to your app:
    `POST https://graph.facebook.com/<version>/<page-id>/subscribed_apps?subscribed_fields=leadgen&access_token=<page-token>`
 8. Create a **Destination** and set it as the page's default destination (or on specific forms).
 
@@ -82,7 +82,7 @@ Always end each value with `| tojson`. The admin shows a live preview of the ren
 
 ### Retries
 
-Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h (`Retry-After` is honored). Other 4xx responses fail immediately. Failed deliveries can be resent from **Deliveries** in the admin.
+Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h (`Retry-After` is honored) — 7 attempts over about a day and a half. Other 4xx responses fail immediately. Finished deliveries (successful or failed) can be resent from **Deliveries** in the admin, which starts a fresh cycle of 7 attempts; deliveries still pending are skipped.
 
 ## Configuration
 
@@ -96,17 +96,26 @@ Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 mi
 | `REDIS_URL` | `redis://localhost:6379/0` | Celery broker. |
 | `META_GRAPH_VERSION` | see `.env.example` | Graph API version for new Meta apps. |
 | `ALLOW_PRIVATE_DESTINATIONS` | `false` | Allow destinations on private networks (e.g. n8n in the same Docker network). |
+| `CSRF_TRUSTED_ORIGINS` | `PUBLIC_BASE_URL` | Comma-separated origins allowed to submit admin forms, e.g. `https://leads.example.com`. |
 | `SECURE_SSL_REDIRECT` | `true` | Set to `false` only for local testing over HTTP. |
+| `SECURE_HSTS_SECONDS` | `31536000` | HSTS max-age when `SECURE_SSL_REDIRECT` is on; use a small value while testing. |
+| `DJANGO_DEBUG` | `false` | Debug mode. Never enable in production. |
+| `LOG_LEVEL` | `INFO` | Log level for the web, worker and beat processes. |
+| `WEB_CONCURRENCY` | `3` | Number of gunicorn workers in the web container. |
 
 ## Development
 
 ```bash
 uv sync
-cp .env.example .env   # set LEADHOOK_ENCRYPTION_KEY, DJANGO_DEBUG=true, remove DATABASE_URL
+cp .env.example .env   # set LEADHOOK_ENCRYPTION_KEY, DJANGO_DEBUG=true, remove DATABASE_URL,
+                       # and set REDIS_URL=redis://localhost:6379/0 (the compose host name "redis"
+                       # does not resolve outside Docker)
 uv run python manage.py migrate
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
+
+Tests run Celery tasks eagerly on in-memory SQLite and need neither Redis nor PostgreSQL. To run them against PostgreSQL, set `LEADHOOK_TEST_DATABASE_URL` (CI does). To run a real worker locally, start Redis (e.g. `docker run -p 6379:6379 redis:7-alpine`) and run `uv run celery -A leadhook worker` with `REDIS_URL=redis://localhost:6379/0`.
 
 ## License
 
