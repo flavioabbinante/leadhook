@@ -102,3 +102,55 @@ def test_non_json_body_is_stored_without_crashing(client, django_capture_on_comm
 def test_other_methods_are_not_allowed(client):
     app = make_meta_app()
     assert client.put(_url(app)).status_code == 405
+
+
+def test_non_ascii_verify_token_is_forbidden(client):
+    app = make_meta_app()
+    response = client.get(
+        _url(app), {"hub.mode": "subscribe", "hub.verify_token": "\u00e9", "hub.challenge": "42"}
+    )
+    assert response.status_code == 403
+
+
+def test_non_ascii_signature_header_is_stored_as_invalid(client):
+    app = make_meta_app()
+    response = client.post(
+        _url(app),
+        data=b"{}",
+        content_type="application/json",
+        HTTP_X_HUB_SIGNATURE_256="sha256=\u00e9",
+    )
+    assert response.status_code == 200
+    assert not WebhookEvent.objects.get(meta_app=app).signature_ok
+
+
+def test_nul_characters_are_stripped_from_payload(client):
+    app = make_meta_app()
+    body = json.dumps({"a": ["x\u0000y"], "b\u0000": {"c": "d\u0000"}}).encode()
+    response = client.post(
+        _url(app), data=body, content_type="application/json", HTTP_X_HUB_SIGNATURE_256=sign(body)
+    )
+    assert response.status_code == 200
+    assert WebhookEvent.objects.get().payload == {"a": ["xy"], "b": {"c": "d"}}
+
+
+def test_nul_in_unparseable_body_is_stripped(client):
+    app = make_meta_app()
+    response = client.post(_url(app), data=b"a\x00b", content_type="text/plain")
+    assert response.status_code == 200
+    assert WebhookEvent.objects.get().payload == {"unparseable_body": "ab"}
+
+
+def test_broker_failure_still_returns_200(client, django_capture_on_commit_callbacks):
+    app = make_meta_app()
+    body = json.dumps(leadgen_payload()).encode()
+    with mock.patch("leadhook.meta.views.process_event.delay", side_effect=OSError("down")):
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.post(
+                _url(app),
+                data=body,
+                content_type="application/json",
+                HTTP_X_HUB_SIGNATURE_256=sign(body),
+            )
+    assert response.status_code == 200
+    assert WebhookEvent.objects.get().processed_at is None
