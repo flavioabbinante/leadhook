@@ -1,244 +1,247 @@
 # LeadHook — Design
 
-- **Data:** 2026-10-15
-- **Stato:** approvato in chat, in attesa di revisione della spec
-- **Nome:** "LeadHook" è provvisorio
+- **Date:** 2026-10-15
+- **Status:** approved in discussion, pending spec review
+- **Name:** "LeadHook" is a working title
 
-## 1. Obiettivo
+## 1. Goal
 
-Connettore **open source e self-hosted** per Facebook/Instagram Lead Ads: riceve i lead da **più pagine e più form contemporaneamente** tramite un'unica app Meta e li invia a destinazioni webhook configurabili (n8n, Make, CRM con API, ecc.).
+An **open source, self-hosted** connector for Facebook/Instagram Lead Ads: it receives leads from **many pages and forms at once** through a single Meta app and forwards them to configurable webhook destinations (n8n, Make, any CRM with an API, etc.).
 
-Nasce per sostituire un servizio a pagamento (LeadSync) usato perché il trigger Facebook Lead Ads di n8n gestisce una sola sottoscrizione alla volta (Meta accetta un solo callback URL per app), e perché un router n8n con gli ID dei form scritti a mano rende faticoso aggiungere nuove commesse.
+Motivation: replace a paid service (LeadSync) that was adopted because n8n's Facebook Lead Ads trigger supports only one subscription at a time (Meta accepts a single callback URL per app), and because an n8n router with hard-coded form IDs makes adding new campaigns tedious.
 
-### Criteri di successo
+### Success criteria
 
-1. Aggiungere una nuova campagna/commessa non richiede di modificare codice né workflow: al massimo si assegna una destinazione a un form da un elenco.
-2. Nessun lead perso: ogni evento è salvato prima di rispondere a Meta; una riconciliazione periodica recupera i lead i cui webhook non sono mai arrivati.
-3. I workflow n8n che oggi ricevono lead da LeadSync / dal trigger FB di n8n funzionano senza modifiche (payload compatibile).
-4. Installazione con `docker compose up` e configurazione guidata dall'admin.
+1. Adding a new campaign requires no code or workflow changes: at most, assigning a destination to a form picked from a list.
+2. No lost leads: every event is persisted before Meta gets a response; periodic reconciliation recovers leads whose webhook never arrived.
+3. n8n workflows that currently receive leads from LeadSync or from n8n's Facebook trigger keep working unchanged (compatible payload).
+4. Installation with `docker compose up` and guided setup in the admin.
 
-### Fuori ambito (v1)
+### Out of scope (v1)
 
-- Multi-tenant / pagine di terzi via Facebook Login (richiede Advanced Access Meta). Il modello dati è predisposto (`Workspace`) ma la v1 ne usa uno solo.
-- Destinazioni diverse dal webhook (email, Google Sheets, Telegram): previste in futuro tramite l'astrazione `Destination`.
-- Regole di instradamento condizionali sui valori dei campi (si fanno a valle, es. in n8n).
-- Mappatura campi con interfaccia grafica (in futuro, sopra i template).
-- Versione cloud ospitata.
+- Multi-tenancy / third-party pages via Facebook Login (requires Meta Advanced Access). The data model is ready for it (`Workspace`), but v1 uses a single workspace.
+- Destinations other than webhooks (email, Google Sheets, Telegram): planned via the `Destination` abstraction.
+- Conditional routing on field values (belongs downstream, e.g. in n8n).
+- Visual field-mapping UI (future, built on top of templates).
+- Hosted cloud offering.
+- Translations: the product ships in English only.
 
-## 2. Decisioni chiave
+## 2. Key decisions
 
-| Tema | Decisione |
+| Topic | Decision |
 |---|---|
-| Modello di distribuzione | Self-hosted, "porta la tua app Meta": ogni installazione usa la propria app Meta e le proprie pagine |
-| Stack | Python, Django (admin come interfaccia principale) |
-| Lavori in background | Celery + Redis (worker + beat) |
-| Database | PostgreSQL in produzione, SQLite solo per sviluppo |
-| Destinazioni v1 | Solo webhook HTTP, con payload standard o template personalizzato |
-| Instradamento | Form → N destinazioni; fallback su destinazioni default della pagina; altrimenti `unrouted` |
-| Licenza | AGPL-3.0 |
+| Language | English only: code, identifiers, comments, UI, docs, README, commit messages |
+| Distribution model | Self-hosted, "bring your own Meta app": each installation uses its own Meta app and its own pages |
+| Stack | Python, Django (admin as the primary UI) |
+| Background work | Celery + Redis (worker + beat) |
+| Database | PostgreSQL in production, SQLite for development only |
+| v1 destinations | HTTP webhook only, with standard payload or custom template |
+| Routing | Form → N destinations; fallback to the page's default destinations; otherwise `unrouted` |
+| License | AGPL-3.0 |
 
-## 3. Architettura
+## 3. Architecture
 
 ```
-             Meta (webhook leadgen)
+             Meta (leadgen webhook)
                       │ POST /webhooks/meta/<uuid>/
                       ▼
 ┌──────────────── web (Django + gunicorn) ─────────────────┐
-│ • verifica firma X-Hub-Signature-256 + hub.challenge     │
-│ • salva l'evento grezzo → risponde 200 subito            │
-│ • admin: app Meta, pagine, form, destinazioni, lead, log │
+│ • verifies X-Hub-Signature-256 + hub.challenge           │
+│ • stores raw event → responds 200 immediately            │
+│ • admin: Meta app, pages, forms, destinations, leads     │
 └────────────────────────────┬─────────────────────────────┘
-                             │ task Celery
+                             │ Celery task
                 ┌────────────▼──────────────┐
   Redis ◄──────►│     worker (Celery)        │
  (broker)       │ 1. fetch_lead: Graph API   │
-                │ 2. route: regole → dest.   │
+                │ 2. route: rules → dests    │
                 │ 3. deliver: POST webhook   │──► n8n / CRM / …
-                │    retry con backoff       │
+                │    retry with backoff      │
                 └────────────▲──────────────┘
-                             │ periodico
+                             │ periodic
                 ┌────────────┴──────────────┐
                 │     beat (Celery)          │
-                │ • riconciliazione lead     │
-                │ • sync form                │
-                │ • controllo token/iscriz.  │
-                │ • pulizia dati (retention) │
+                │ • lead reconciliation      │
+                │ • form sync                │
+                │ • token/subscription check │
+                │ • data retention purge     │
                 └───────────────────────────┘
                      PostgreSQL
 ```
 
-- **Una sola immagine Docker** avviata in 3 ruoli: `web`, `worker`, `beat`. `docker-compose.yml` include anche `redis` e `postgres`.
-- **Pipeline a task separati:** `process_event` → `fetch_lead` → `route_lead` → `deliver` (un task per ogni coppia lead-destinazione). Un fallimento verso una destinazione ritenta solo quella consegna.
-- **Astrazione `Destination`:** classe base con `render(lead) -> Request` e `send(request) -> Result`; v1 implementa solo `WebhookDestination`.
+- **Single Docker image** started in 3 roles: `web`, `worker`, `beat`. `docker-compose.yml` also includes `redis` and `postgres`.
+- **Pipeline of separate tasks:** `process_event` → `fetch_lead` → `route_lead` → `deliver` (one task per lead/destination pair). A failure towards one destination retries only that delivery.
+- **`Destination` abstraction:** base class with `render(lead) -> Request` and `send(request) -> Result`; v1 implements only `WebhookDestination`.
 
-### Moduli (app Django)
+### Modules (Django apps)
 
-| App | Responsabilità |
+| App | Responsibility |
 |---|---|
-| `core` | `Workspace`, cifratura segreti, impostazioni, healthcheck |
-| `meta` | `MetaApp`, `Page`, `Form`; client Graph API; endpoint webhook; sync form; controllo iscrizioni e token |
-| `leads` | `WebhookEvent`, `Lead`; parsing evento, fetch lead, riconciliazione, retention |
-| `routing` | Logica form → destinazioni |
-| `destinations` | `Destination`, `Delivery`; rendering template, invio, retry, condizione di successo, protezione SSRF |
-| `alerts` | Avvisi email con raggruppamento |
-| `dashboard` | Home dell'admin, procedura guidata di onboarding |
+| `core` | `Workspace`, secret encryption, settings, health check |
+| `meta` | `MetaApp`, `Page`, `Form`; Graph API client; webhook endpoint; form sync; subscription and token checks |
+| `leads` | `WebhookEvent`, `Lead`; event parsing, lead fetch, reconciliation, retention |
+| `routing` | Form → destinations logic |
+| `destinations` | `Destination`, `Delivery`; template rendering, sending, retries, success condition, SSRF protection |
+| `alerts` | Email alerts with throttling |
+| `dashboard` | Admin home, onboarding wizard |
 
-## 4. Modello dati
+## 4. Data model
 
-🔒 = campo cifrato (Fernet, chiave da `LEADHOOK_ENCRYPTION_KEY`).
+🔒 = encrypted field (Fernet, key from `LEADHOOK_ENCRYPTION_KEY`).
 
-### Configurazione
+### Configuration
 
-**`Workspace`**: `name`. Uno solo in v1, creato da migrazione.
+**`Workspace`**: `name`. Exactly one in v1, created by a data migration.
 
-**`MetaApp`**: `workspace`, `app_id`, `app_secret`🔒, `verify_token`, `webhook_uuid`, `access_token`🔒, `token_type` (`system_user` | `user`), `token_expires_at` (null per system user), `graph_version` (es. `v21.0`).
+**`MetaApp`**: `workspace`, `app_id`, `app_secret`🔒, `verify_token`, `webhook_uuid`, `access_token`🔒, `token_type` (`system_user` | `user`), `token_expires_at` (null for system user tokens), `graph_version` (e.g. `v21.0`).
 
-**`Page`**: `meta_app`, `page_id` (unico), `name`, `page_token`🔒, `subscribed` (bool), `last_checked_at`, `last_lead_at`, `error` (testo, vuoto se ok), `default_destinations` (M2M → `Destination`).
+**`Page`**: `meta_app`, `page_id` (unique), `name`, `page_token`🔒, `subscribed` (bool), `last_checked_at`, `last_lead_at`, `error` (text, empty when healthy), `default_destinations` (M2M → `Destination`).
 
-**`Form`**: `page`, `form_id` (unico), `name`, `status` (`ACTIVE` | `ARCHIVED` | …), `destinations` (M2M → `Destination`), `last_synced_at`.
+**`Form`**: `page`, `form_id` (unique), `name`, `status` (`ACTIVE` | `ARCHIVED` | …), `destinations` (M2M → `Destination`), `last_synced_at`.
 
-**`Destination`**: `workspace`, `name`, `kind` (solo `webhook` in v1), `url`, `method` (`POST` | `PUT`), `auth_type` (`none` | `header` | `bearer` | `hmac`), `auth_header_name`, `secret`🔒, `extra_headers` (JSON), `payload_template` (testo; vuoto = formato standard), `success_condition` (testo; vuoto = qualsiasi 2xx), `timeout_s` (default 15), `active`.
+**`Destination`**: `workspace`, `name`, `kind` (only `webhook` in v1), `url`, `method` (`POST` | `PUT`), `auth_type` (`none` | `header` | `bearer` | `hmac`), `auth_header_name`, `secret`🔒, `extra_headers` (JSON), `payload_template` (text; empty = standard payload), `success_condition` (text; empty = any 2xx), `timeout_s` (default 15), `active`.
 
-### Dati operativi
+### Operational data
 
 **`WebhookEvent`**: `received_at`, `payload` (JSON), `signature_ok`, `processed_at`, `error`.
 
-**`Lead`**: `leadgen_id` (unico), `page`, `form`, `created_time`, `ad_id`, `ad_name`, `adset_id`, `adset_name`, `campaign_id`, `campaign_name`, `is_organic`, `field_data` (JSON grezzo Meta), `data` (JSON semplificato), `source` (`webhook` | `reconcile` | `manual`), `status`, `error`.
+**`Lead`**: `leadgen_id` (unique), `page`, `form`, `created_time`, `ad_id`, `ad_name`, `adset_id`, `adset_name`, `campaign_id`, `campaign_name`, `is_organic`, `field_data` (raw Meta JSON), `data` (simplified JSON), `source` (`webhook` | `reconcile` | `manual`), `status`, `error`.
 
-Stati del lead: `received` → `fetched` → `routed` | `unrouted` → `delivered` | `partially_failed` | `failed`.
+Lead states: `received` → `fetched` → `routed` | `unrouted` → `delivered` | `partially_failed` | `failed`.
 
-**`Delivery`**: `lead`, `destination`, `status` (`pending` | `success` | `failed`), `attempts`, `next_retry_at`, `last_status_code`, `last_error`, `request_body`, `response_body` (troncato a 4 KB), `delivered_at`. Unico su (`lead`, `destination`).
+**`Delivery`**: `lead`, `destination`, `status` (`pending` | `success` | `failed`), `attempts`, `next_retry_at`, `last_status_code`, `last_error`, `request_body`, `response_body` (truncated to 4 KB), `delivered_at`. Unique on (`lead`, `destination`).
 
-### Regole
+### Rules
 
-- **Instradamento:** se `form.destinations` è non vuoto → quelle; altrimenti `page.default_destinations`; se vuoto → lead `unrouted`. Solo destinazioni `active`. Quando si assegnano destinazioni a un form con lead `unrouted`, l'admin propone di instradarli.
-- **Form sconosciuto:** se arriva un lead per un `form_id` non presente, il form viene creato al volo leggendolo dalla Graph API.
-- **Deduplica:** `Lead.leadgen_id` unico; un lead già presente (da webhook o riconciliazione) non viene ricreato né reinviato.
-- **Stato aggregato del lead:** tutte le `Delivery` `success` → `delivered`; tutte `failed` → `failed`; mix → `partially_failed`.
-- **Retention:** `LEAD_RETENTION_DAYS` (default 90). Un task giornaliero svuota `field_data`, `data`, `request_body`, `response_body` e `WebhookEvent.payload` più vecchi, mantenendo i metadati.
+- **Routing:** if `form.destinations` is non-empty → use those; otherwise `page.default_destinations`; if still empty → lead is `unrouted`. Only `active` destinations are used. When destinations are assigned to a form that has `unrouted` leads, the admin offers to route them.
+- **Unknown form:** if a lead arrives for a `form_id` not yet stored, the form is created on the fly by reading it from the Graph API.
+- **Deduplication:** `Lead.leadgen_id` is unique; a lead that already exists (from webhook or reconciliation) is neither recreated nor re-sent.
+- **Aggregate lead status:** all `Delivery` rows `success` → `delivered`; all `failed` → `failed`; mixed → `partially_failed`.
+- **Retention:** `LEAD_RETENTION_DAYS` (default 90). A daily task clears `field_data`, `data`, `request_body`, `response_body` and `WebhookEvent.payload` older than that, keeping metadata.
 
-## 5. Flusso
+## 5. Flow
 
-1. **Ricezione.** `POST /webhooks/meta/<webhook_uuid>/`: verifica `X-Hub-Signature-256` sul body grezzo con `app_secret`; salva `WebhookEvent`; accoda `process_event`; risponde 200. Firma non valida → salva con `signature_ok=false`, non processa, risponde 200.
-2. **`process_event`.** Estrae ogni `entry[].changes[]` con `field == "leadgen"` → (`leadgen_id`, `page_id`, `form_id`). Crea `Lead` (`received`) se non esiste; accoda `fetch_lead`.
-3. **`fetch_lead`.** `GET /{leadgen_id}?fields=id,created_time,field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,is_organic` con il token della pagina. Costruisce `data`. Stato `fetched`; accoda `route_lead`.
-4. **`route_lead`.** Applica le regole; crea una `Delivery` per destinazione; accoda `deliver` per ognuna.
-5. **`deliver`.** Renderizza il payload, invia, valuta l'esito, aggiorna `Delivery` e lo stato aggregato del lead.
+1. **Receive.** `POST /webhooks/meta/<webhook_uuid>/`: verify `X-Hub-Signature-256` against the raw body with `app_secret`; store `WebhookEvent`; enqueue `process_event`; respond 200. Invalid signature → stored with `signature_ok=false`, not processed, respond 200.
+2. **`process_event`.** Extract every `entry[].changes[]` with `field == "leadgen"` → (`leadgen_id`, `page_id`, `form_id`). Create `Lead` (`received`) if it does not exist; enqueue `fetch_lead`.
+3. **`fetch_lead`.** `GET /{leadgen_id}?fields=id,created_time,field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,is_organic` using the page token. Build `data`. Status `fetched`; enqueue `route_lead`.
+4. **`route_lead`.** Apply routing rules; create one `Delivery` per destination; enqueue `deliver` for each.
+5. **`deliver`.** Render the payload, send, evaluate the outcome, update `Delivery` and the aggregate lead status.
 
-### Task periodici (beat)
+### Periodic tasks (beat)
 
-| Task | Frequenza | Cosa fa |
+| Task | Interval | What it does |
 |---|---|---|
-| `reconcile_leads` | 15 min | Per ogni form `ACTIVE` di pagine collegate: `GET /{form_id}/leads?filtering=[time_created > ultimo_controllo − 1h]`; crea i lead mancanti con `source=reconcile` |
-| `sync_forms` | 1 h | Aggiorna l'elenco form di ogni pagina |
-| `check_pages` | 1 giorno | Verifica token (debug_token) e iscrizione `subscribed_apps`; reiscrive se manca; segnala errori |
-| `check_silence` | 1 h | Avvisa se una pagina con lead abituali non ne riceve da `SILENCE_ALERT_HOURS` (default 24) |
-| `purge_old_data` | 1 giorno | Retention |
-| `heartbeat` | 1 min | Aggiorna il timestamp letto da `/health/` |
+| `reconcile_leads` | 15 min | For each `ACTIVE` form on connected pages: `GET /{form_id}/leads` filtered by `time_created > last_check − 1h`; create missing leads with `source=reconcile` |
+| `sync_forms` | 1 h | Refresh each page's form list |
+| `check_pages` | 1 day | Validate token (`debug_token`) and `subscribed_apps` subscription; resubscribe if missing; flag errors |
+| `check_silence` | 1 h | Alert if a page that usually receives leads has had none for `SILENCE_ALERT_HOURS` (default 24) |
+| `purge_old_data` | 1 day | Retention |
+| `heartbeat` | 1 min | Update the timestamp checked by `/health/` |
 
-## 6. Payload verso i webhook
+## 6. Webhook payload
 
-### Formato standard (template vuoto)
+### Standard payload (empty template)
 
-Il primo livello è identico all'output "Simplify" del trigger Facebook Lead Ads di n8n; i campi aggiuntivi sono solo in aggiunta.
+The top level matches the "Simplify" output of n8n's Facebook Lead Ads trigger; extra fields are additive only.
 
 ```json
 {
   "id": "1234567890123456",
   "created_time": "2026-10-15T08:30:00+0000",
-  "data": { "nome_e_cognome": "Mario Rossi", "numero_di_telefono": "+393331234567" },
-  "form":     { "id": "…", "name": "…", "locale": "it_IT", "status": "ACTIVE" },
+  "data": { "full_name": "Jane Doe", "phone_number": "+15551234567" },
+  "form":     { "id": "…", "name": "…", "locale": "en_US", "status": "ACTIVE" },
   "page":     { "id": "…", "name": "…" },
   "ad":       { "id": "…", "name": "…" },
   "adset":    { "id": "…", "name": "…" },
   "campaign": { "id": "…", "name": "…" },
   "is_organic": false,
-  "field_data": [ { "name": "nome_e_cognome", "values": ["Mario Rossi"] } ],
+  "field_data": [ { "name": "full_name", "values": ["Jane Doe"] } ],
   "_leadhook": { "version": 1, "delivery_id": "…", "attempt": 1, "source": "webhook", "sent_at": "…" }
 }
 ```
 
-In `data`: valore singolo → stringa; valori multipli → array.
+In `data`: single value → string; multiple values → array.
 
-### Template personalizzato
+### Custom template
 
-- Motore: **Jinja2 `SandboxedEnvironment`**, `autoescape` disattivato, `StrictUndefined` disattivato (variabile mancante → vuoto).
-- Contesto: gli stessi campi del formato standard (`id`, `data`, `form`, `page`, `ad`, `adset`, `campaign`, `created_time`, `is_organic`, `field_data`, `_leadhook`).
-- Il risultato deve essere JSON valido, altrimenti la consegna fallisce senza retry.
-- Filtri forniti: `tojson`, `first_word`, `rest_words`, `phone_it` (rimuove spazi e prefisso `+39`/`0039`), `date(tz, formato)`, `map(dizionario)` (valore non mappato → invariato), `default`.
-- Admin: anteprima del payload renderizzato su un lead reale a scelta.
+- Engine: **Jinja2 `SandboxedEnvironment`**, autoescape off, undefined variables render as empty.
+- Context: the same fields as the standard payload (`id`, `data`, `form`, `page`, `ad`, `adset`, `campaign`, `created_time`, `is_organic`, `field_data`, `_leadhook`).
+- The rendered output must be valid JSON; otherwise the delivery fails without retry.
+- Built-in filters: `tojson`, `first_word`, `rest_words`, `phone_strip_prefix(prefix)` (removes whitespace and the given country prefix, e.g. `"+39"`), `date(tz, format)`, `map(dict)` (unmapped value → unchanged), `default`.
+- Admin: preview of the rendered payload against a real lead of choice.
 
-### Header
+### Headers
 
-| Header | Valore |
+| Header | Value |
 |---|---|
 | `Content-Type` | `application/json` |
 | `Idempotency-Key` | `leadgen_id` |
-| `X-LeadHook-Timestamp` | timestamp Unix |
-| `X-LeadHook-Signature` | `sha256=HMAC_SHA256(secret, timestamp + "." + body)`, solo con `auth_type=hmac` |
-| `Authorization: Bearer <secret>` | con `auth_type=bearer` |
-| `<auth_header_name>: <secret>` | con `auth_type=header` |
-| `extra_headers` | aggiunti così come configurati |
+| `X-LeadHook-Timestamp` | Unix timestamp |
+| `X-LeadHook-Signature` | `sha256=HMAC_SHA256(secret, timestamp + "." + body)`, only with `auth_type=hmac` |
+| `Authorization: Bearer <secret>` | with `auth_type=bearer` |
+| `<auth_header_name>: <secret>` | with `auth_type=header` |
+| `extra_headers` | added as configured |
 
-### Esito e retry
+### Outcome and retries
 
-- **Successo:** 2xx **e**, se impostata, `success_condition` vera. La condizione è un'espressione Jinja sandbox valutata con `response` (body JSON, `None` se non JSON) e `status_code`, es. `response.success == true`.
-- **Retry:** errore di rete, timeout, 5xx, 408, 429, oppure 2xx con condizione di successo falsa. Backoff: 1 min, 5 min, 30 min, 2 h, 6 h, 24 h (7 tentativi totali); `Retry-After` rispettato se presente.
-- **Fallimento immediato:** altri 4xx, errore di template, JSON renderizzato non valido.
-- **Rinvio manuale:** azione admin su singole consegne o in blocco (ricrea un tentativo con `attempt` successivo).
+- **Success:** 2xx **and**, if set, `success_condition` evaluates true. The condition is a sandboxed Jinja expression evaluated with `response` (parsed JSON body, `None` if not JSON) and `status_code`, e.g. `response.success == true`.
+- **Retry:** network error, timeout, 5xx, 408, 429, or 2xx with a false success condition. Backoff: 1 min, 5 min, 30 min, 2 h, 6 h, 24 h (7 attempts total); `Retry-After` honored when present.
+- **Immediate failure:** other 4xx, template error, invalid rendered JSON.
+- **Manual resend:** admin action on single or bulk deliveries (creates a new attempt with the next `attempt` number).
 
-## 7. Sicurezza
+## 7. Security
 
-- **Webhook Meta:** `GET` risponde a `hub.challenge` solo se `hub.verify_token` corrisponde; `POST` verifica HMAC sul body grezzo con confronto a tempo costante; URL con UUID per installazione.
-- **Admin:** login Django; in produzione `SECURE_SSL_REDIRECT`, HSTS, cookie `Secure`/`HttpOnly`.
-- **Segreti:** cifrati con Fernet; avvio bloccato se `LEADHOOK_ENCRYPTION_KEY` manca; nell'admin si vedono solo le ultime 4 cifre; mai nei log.
-- **Log:** nessun dato personale dei lead, solo ID.
-- **SSRF:** risoluzione DNS e blocco di IP privati, loopback, link-local e metadata cloud, salvo `ALLOW_PRIVATE_DESTINATIONS=true`; redirect non seguiti.
+- **Meta webhook:** `GET` answers `hub.challenge` only if `hub.verify_token` matches; `POST` verifies the HMAC over the raw body with constant-time comparison; per-installation UUID in the URL.
+- **Admin:** Django auth; in production `SECURE_SSL_REDIRECT`, HSTS, `Secure`/`HttpOnly` cookies.
+- **Secrets:** Fernet-encrypted; startup fails if `LEADHOOK_ENCRYPTION_KEY` is missing; admin shows only the last 4 characters; never logged.
+- **Logs:** no lead personal data, IDs only.
+- **SSRF:** DNS resolution and blocking of private, loopback, link-local and cloud metadata addresses, unless `ALLOW_PRIVATE_DESTINATIONS=true`; redirects are not followed.
 
-## 8. Gestione errori
+## 8. Error handling
 
-| Problema | Comportamento |
+| Problem | Behavior |
 |---|---|
-| Fetch lead fallito (rete, 5xx, rate limit Meta) | Retry Celery con backoff; la riconciliazione fa da rete di sicurezza |
-| Token non valido (errore Meta 190) | Stop retry per quella pagina, `Page.error` valorizzato, avviso; i lead restano `received` e ripartono quando il token viene aggiornato (azione "Riprocessa") |
-| Pagina non iscritta | `check_pages` la reiscrive; se fallisce, avviso |
-| Errore template / JSON non valido | `Delivery` `failed` senza retry, avviso |
-| Destinazione irraggiungibile | Retry fino a 24 h, poi `failed` + avviso |
-| Lead non instradato | Stato `unrouted`, avviso |
+| Lead fetch failed (network, 5xx, Meta rate limit) | Celery retry with backoff; reconciliation is the safety net |
+| Invalid token (Meta error 190) | Stop retries for that page, set `Page.error`, alert; leads stay `received` and resume after the token is updated ("Reprocess" action) |
+| Page not subscribed | `check_pages` resubscribes; alert if that fails |
+| Template error / invalid JSON | `Delivery` `failed` without retry, alert |
+| Destination unreachable | Retry up to 24 h, then `failed` + alert |
+| Unrouted lead | Status `unrouted`, alert |
 
-## 9. Monitoraggio e avvisi
+## 9. Monitoring and alerts
 
-- **Dashboard** (home admin): lead oggi / 7 giorni per form, consegne fallite, lead non instradati, stato di ogni pagina (token, iscrizione, ultimo lead).
-- **Avvisi email** (SMTP Django, destinatari in `ALERT_EMAILS`): consegna fallita definitivamente, errore token/iscrizione, lead non instradato, silenzio anomalo. Raggruppati: massimo un'email ogni 15 minuti per tipo.
-- **`GET /health/`**: verifica database, Redis e heartbeat beat (< 5 minuti); 200 o 503.
+- **Dashboard** (admin home): leads today / last 7 days per form, failed deliveries, unrouted leads, per-page health (token, subscription, last lead).
+- **Email alerts** (Django SMTP, recipients from `ALERT_EMAILS`): permanently failed delivery, token/subscription error, unrouted lead, unusual silence. Throttled: at most one email per type every 15 minutes.
+- **`GET /health/`**: checks database, Redis and beat heartbeat (< 5 minutes old); returns 200 or 503.
 
 ## 10. Onboarding
 
-Procedura guidata nell'admin, finché la configurazione è incompleta:
+Admin wizard, shown until setup is complete:
 
-1. Creazione utente admin (`createsuperuser` o procedura).
-2. Inserimento `app_id`, `app_secret`, token (System User consigliato), con link alla guida.
-3. Visualizzazione URL di callback e verify token da incollare nell'app Meta; pulsante "Verifica" che interroga `/{app_id}/subscriptions`.
-4. Elenco pagine accessibili dal token; selezione → iscrizione `subscribed_apps` (`leadgen`) + sync form.
-5. Creazione prima destinazione e assegnazione come default di una pagina.
-6. "Invia lead di test": crea un lead di test sul form scelto e mostra l'avanzamento nella pipeline.
+1. Create the admin user (`createsuperuser` or wizard).
+2. Enter `app_id`, `app_secret` and token (System User recommended), with a link to the guide.
+3. Show the callback URL and verify token to paste into the Meta app; a "Verify" button queries `/{app_id}/subscriptions`.
+4. List pages reachable with the token; selecting them subscribes via `subscribed_apps` (`leadgen`) and syncs forms.
+5. Create the first destination and set it as a page default.
+6. "Send test lead": creates a test lead on a chosen form (`POST /{form_id}/test_leads`) and shows it moving through the pipeline.
 
-Il README include la guida completa alla configurazione dell'app Meta (Business Verification, permessi `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads`, System User, Accesso ai lead nel Business Manager, modalità Live).
+The README includes the full Meta app setup guide: Business Verification, permissions (`leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads`), System User, Leads Access in Business Manager, Live mode.
 
-## 11. Configurazione (variabili d'ambiente)
+## 11. Configuration (environment variables)
 
-`DJANGO_SECRET_KEY`, `LEADHOOK_ENCRYPTION_KEY`, `DATABASE_URL`, `REDIS_URL`, `ALLOWED_HOSTS`, `PUBLIC_BASE_URL`, `EMAIL_URL`, `ALERT_EMAILS`, `LEAD_RETENTION_DAYS` (90), `SILENCE_ALERT_HOURS` (24), `ALLOW_PRIVATE_DESTINATIONS` (false), `META_GRAPH_VERSION` (default per nuove app).
+`DJANGO_SECRET_KEY`, `LEADHOOK_ENCRYPTION_KEY`, `DATABASE_URL`, `REDIS_URL`, `ALLOWED_HOSTS`, `PUBLIC_BASE_URL`, `EMAIL_URL`, `ALERT_EMAILS`, `LEAD_RETENTION_DAYS` (90), `SILENCE_ALERT_HOURS` (24), `ALLOW_PRIVATE_DESTINATIONS` (false), `META_GRAPH_VERSION` (default for new apps).
 
-## 12. Test
+## 12. Testing
 
-- `pytest` + `pytest-django`; Celery `task_always_eager` nei test.
-- Graph API simulata con `responses` e fixture JSON anonimizzate (lead, form, pagine, errore 190, rate limit).
-- Casi obbligatori: firma webhook (valida, non valida, body alterato) e challenge; deduplica webhook + riconciliazione; instradamento (form → default → unrouted, destinazioni inattive); stato aggregato; backoff e classificazione retry/non-retry; `Retry-After`; template, filtri e anteprima; condizione di successo; blocco SSRF; cifratura segreti; retention.
-- Test end-to-end: evento Meta → fetch simulato → consegna a un server HTTP locale di test.
-- CI GitHub Actions: `ruff`, test, build immagine Docker.
+- `pytest` + `pytest-django`; Celery `task_always_eager` in tests.
+- Graph API mocked with `responses` and anonymized JSON fixtures (lead, form, pages, error 190, rate limit).
+- Required cases: webhook signature (valid, invalid, tampered body) and challenge; webhook + reconciliation deduplication; routing (form → default → unrouted, inactive destinations); aggregate status; backoff and retry/no-retry classification; `Retry-After`; templates, filters and preview; success condition; SSRF blocking; secret encryption; retention.
+- End-to-end test: Meta event → mocked fetch → delivery to a local test HTTP server.
+- GitHub Actions CI: `ruff`, tests, Docker image build.
 
 ## 13. Repository
 
-- Licenza **AGPL-3.0**.
-- Struttura: `leadhook/` (progetto Django), app in `leadhook/<app>/`, `tests/`, `docker/`, `docs/`.
-- File: `README.md` (italiano + inglese), `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `docker-compose.yml`, `.env.example`.
+- License **AGPL-3.0**.
+- Everything in English: code, identifiers, comments, admin UI, docs, README, issue/PR templates, commit messages.
+- Layout: `leadhook/` (Django project), apps in `leadhook/<app>/`, `tests/`, `docker/`, `docs/`.
+- Files: `README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `docker-compose.yml`, `.env.example`.
