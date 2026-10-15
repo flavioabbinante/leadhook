@@ -21,6 +21,12 @@ class DestinationForm(SecretAwareModelForm):
     class Meta:
         model = Destination
         exclude = ("workspace",)
+        help_texts = {
+            "extra_headers": (
+                'Additional headers as a JSON object, e.g. {"X-Source": "leadhook"}. '
+                "Stored in clear text — put credentials in Secret, not here."
+            ),
+        }
 
 
 @admin.register(Destination)
@@ -85,12 +91,19 @@ class DeliveryAdmin(admin.ModelAdmin):
 
     @admin.action(description="Resend selected deliveries")
     def resend(self, request, queryset):
-        count = 0
+        count = skipped = 0
         for delivery in queryset.select_related("lead"):
-            reset_for_resend(delivery)
-            deliver.delay(delivery.pk)
-            count += 1
-        self.message_user(request, f"{count} deliveries queued for resending.")
+            # Pending deliveries are being sent or wait for a retry; resetting them would
+            # break their lease, so only finished (success/failed) ones are resent.
+            if reset_for_resend(delivery):
+                deliver.delay(delivery.pk)
+                count += 1
+            else:
+                skipped += 1
+        message = f"{count} deliveries queued for resending."
+        if skipped:
+            message += f" {skipped} skipped (already in progress or scheduled)."
+        self.message_user(request, message)
 
 
 class DeliveryInline(admin.TabularInline):

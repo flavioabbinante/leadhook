@@ -4,7 +4,7 @@ from leadhook.destinations.admin import DeliveryInline
 from leadhook.destinations.tasks import route_lead
 
 from .models import Lead, WebhookEvent
-from .tasks import fetch_lead
+from .tasks import fetch_lead, process_event
 
 
 @admin.register(Lead)
@@ -25,7 +25,8 @@ class LeadAdmin(admin.ModelAdmin):
         for lead in queryset:
             if lead.status == Lead.Status.RECEIVED:
                 fetch_lead.delay(lead.pk)
-            elif lead.status in (Lead.Status.FETCHED, Lead.Status.UNROUTED):
+            elif lead.status in (Lead.Status.FETCHED, Lead.Status.UNROUTED, Lead.Status.ROUTED):
+                # For ROUTED leads route_lead re-dispatches pending deliveries that are due.
                 route_lead.delay(lead.pk)
             else:
                 continue
@@ -41,6 +42,21 @@ class WebhookEventAdmin(admin.ModelAdmin):
     list_display = ("id", "meta_app", "received_at", "signature_ok", "processed_at")
     list_filter = ("signature_ok",)
     readonly_fields = [f.name for f in WebhookEvent._meta.fields]
+    actions = ["process_events"]
 
     def has_add_permission(self, request):
         return False
+
+    @admin.action(description="Process selected events")
+    def process_events(self, request, queryset):
+        count = skipped = 0
+        for event in queryset:
+            if event.signature_ok and event.processed_at is None:
+                process_event.delay(event.pk)
+                count += 1
+            else:
+                skipped += 1
+        message = f"{count} event(s) queued for processing."
+        if skipped:
+            message += f" {skipped} skipped (already processed or invalid signature)."
+        self.message_user(request, message)
