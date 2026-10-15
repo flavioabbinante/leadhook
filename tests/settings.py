@@ -22,3 +22,5 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
+WHITENOISE_AUTOREFRESH = True
+WHITENOISE_USE_FINDERS = True
