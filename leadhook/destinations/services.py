@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from leadhook.leads.models import Lead
@@ -16,6 +16,8 @@ from .templating import TemplateError
 # Seconds before each retry; 6 retries = 7 attempts over ~1.5 days.
 DELIVERY_BACKOFF = [60, 300, 1800, 7200, 21600, 86400]
 MAX_RETRY_DELAY = 86400
+LEASE_MARGIN = 60  # seconds added to the destination timeout
+RETRY_TOLERANCE = 5  # seconds a retry may arrive before its next_retry_at
 
 
 def create_deliveries(lead: Lead) -> list[Delivery]:
@@ -29,22 +31,32 @@ def create_deliveries(lead: Lead) -> list[Delivery]:
         Delivery.objects.get_or_create(lead=lead, destination=destination)[0]
         for destination in destinations
     ]
-    lead.status = Lead.Status.ROUTED
-    lead.save(update_fields=["status", "updated_at"])
+    if lead.status in (Lead.Status.FETCHED, Lead.Status.UNROUTED, Lead.Status.ROUTED):
+        lead.status = Lead.Status.ROUTED
+        lead.save(update_fields=["status", "updated_at"])
     return [d for d in deliveries if d.status == Delivery.Status.PENDING]
 
 
 def attempt_delivery(delivery: Delivery, *, now: datetime | None = None) -> SendResult:
     now = now or timezone.now()
-    # Atomically claim this attempt: if another worker already took it, do not send.
-    # A crash after the POST but before the result is saved can still cause a resend
-    # (inherent to acks_late); receivers dedupe on the Idempotency-Key header.
-    claimed = Delivery.objects.filter(
-        pk=delivery.pk, status=Delivery.Status.PENDING, attempts=delivery.attempts
-    ).update(attempts=F("attempts") + 1, updated_at=now)
+    # Claim the attempt with a lease in one conditional UPDATE: only a PENDING delivery that
+    # is due and not leased by another worker can be claimed. A crash after the POST but
+    # before the result is saved lets the lease expire and then allows a resend (inherent to
+    # acks_late); receivers dedupe on the Idempotency-Key header.
+    lease = now + timedelta(seconds=delivery.destination.timeout_s + LEASE_MARGIN)
+    claimed = (
+        Delivery.objects.filter(pk=delivery.pk, status=Delivery.Status.PENDING)
+        .filter(Q(locked_until__isnull=True) | Q(locked_until__lt=now))
+        .filter(
+            Q(next_retry_at__isnull=True)
+            | Q(next_retry_at__lte=now + timedelta(seconds=RETRY_TOLERANCE))
+        )
+        .update(attempts=F("attempts") + 1, locked_until=lease, updated_at=now)
+    )
     if not claimed:
         return SendResult("skip", error="Attempt claimed by another worker")
-    delivery.attempts += 1
+    delivery.attempts = Delivery.objects.values_list("attempts", flat=True).get(pk=delivery.pk)
+    delivery.locked_until = lease
     destination = delivery.destination
     context = build_context(delivery.lead, delivery, attempt=delivery.attempts, sent_at=now)
     try:
@@ -66,6 +78,10 @@ def attempt_delivery(delivery: Delivery, *, now: datetime | None = None) -> Send
     delivery.last_status_code = result.status_code
     delivery.last_error = result.error
     delivery.next_retry_at = None
+    if result.outcome != "retry":
+        # On retry the lease is kept until schedule_retry/mark_delivery_failed releases it,
+        # so no other worker can slip in between the attempt and its rescheduling.
+        delivery.locked_until = None
     if result.outcome == "success":
         delivery.status = Delivery.Status.SUCCESS
         delivery.delivered_at = now
@@ -84,14 +100,18 @@ def next_retry_delay(retries_done: int, retry_after: int | None) -> int:
 
 def schedule_retry(delivery: Delivery, delay: int, *, now: datetime | None = None) -> None:
     delivery.next_retry_at = (now or timezone.now()) + timedelta(seconds=delay)
-    delivery.save(update_fields=["next_retry_at", "updated_at"])
+    delivery.locked_until = None
+    delivery.save(update_fields=["next_retry_at", "locked_until", "updated_at"])
 
 
 def mark_delivery_failed(delivery: Delivery, error: str) -> None:
     delivery.status = Delivery.Status.FAILED
     delivery.last_error = error
     delivery.next_retry_at = None
-    delivery.save(update_fields=["status", "last_error", "next_retry_at", "updated_at"])
+    delivery.locked_until = None
+    delivery.save(
+        update_fields=["status", "last_error", "next_retry_at", "locked_until", "updated_at"]
+    )
 
 
 def refresh_lead_status(lead: Lead) -> None:
@@ -113,8 +133,19 @@ def refresh_lead_status(lead: Lead) -> None:
 def reset_for_resend(delivery: Delivery) -> None:
     delivery.status = Delivery.Status.PENDING
     delivery.next_retry_at = None
-    delivery.save(update_fields=["status", "next_retry_at", "updated_at"])
+    delivery.locked_until = None
+    delivery.save(update_fields=["status", "next_retry_at", "locked_until", "updated_at"])
     lead = delivery.lead
     if lead.status != Lead.Status.ROUTED:
         lead.status = Lead.Status.ROUTED
         lead.save(update_fields=["status", "updated_at"])
+
+
+def is_dispatchable(delivery: Delivery, *, now: datetime | None = None) -> bool:
+    """True for a pending delivery that is due and not leased by a running attempt."""
+    now = now or timezone.now()
+    return (
+        delivery.status == Delivery.Status.PENDING
+        and (delivery.next_retry_at is None or delivery.next_retry_at <= now)
+        and (delivery.locked_until is None or delivery.locked_until < now)
+    )

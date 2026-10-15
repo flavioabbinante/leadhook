@@ -7,6 +7,7 @@ from .services import (
     DELIVERY_BACKOFF,
     attempt_delivery,
     create_deliveries,
+    is_dispatchable,
     mark_delivery_failed,
     next_retry_delay,
     refresh_lead_status,
@@ -21,8 +22,10 @@ def route_lead(lead_id: int) -> None:
         return
     # ROUTED is accepted so a lost deliver dispatch is recovered on redelivery;
     # create_deliveries is idempotent and deliver ignores non-pending deliveries.
+    # Deliveries waiting out a retry countdown or being sent right now are left alone.
     for delivery in create_deliveries(lead):
-        deliver.delay(delivery.pk)
+        if is_dispatchable(delivery):
+            deliver.delay(delivery.pk)
 
 
 @shared_task(bind=True, max_retries=len(DELIVERY_BACKOFF))
