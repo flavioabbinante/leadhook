@@ -6,6 +6,7 @@ from celery.exceptions import Retry
 
 from leadhook.destinations.models import Delivery
 from leadhook.leads.models import Lead, WebhookEvent
+from leadhook.leads.services import FETCH_BACKOFF, FetchOutcome
 from leadhook.leads.tasks import fetch_lead, process_event
 from tests.factories import make_destination, make_form, make_page
 from tests.fixtures import GRAPH_LEAD, leadgen_payload
@@ -93,3 +94,28 @@ def test_process_event_redispatches_fetch_for_existing_received_lead():
     with mock.patch("leadhook.leads.tasks.fetch_lead.delay") as delay:
         process_event(_event().pk)
     delay.assert_called_once()
+
+
+def test_fetch_lead_retry_index_comes_from_attempt_argument():
+    lead = Lead.objects.create(leadgen_id="333", page_external_id="111")
+    with (
+        mock.patch("leadhook.leads.tasks.fetch_lead_details", return_value=FetchOutcome.RETRY),
+        mock.patch.object(fetch_lead, "retry", side_effect=Retry()) as retry,
+        pytest.raises(Retry),
+    ):
+        fetch_lead(lead.pk, attempt=3)
+    retry.assert_called_once()
+    assert retry.call_args.kwargs["countdown"] == FETCH_BACKOFF[3]
+    assert retry.call_args.kwargs["kwargs"] == {"attempt": 4}
+
+
+def test_fetch_lead_gives_up_after_last_attempt():
+    lead = Lead.objects.create(leadgen_id="333", page_external_id="111")
+    with (
+        mock.patch("leadhook.leads.tasks.fetch_lead_details", return_value=FetchOutcome.RETRY),
+        mock.patch.object(fetch_lead, "retry") as retry,
+    ):
+        fetch_lead(lead.pk, attempt=len(FETCH_BACKOFF))
+    retry.assert_not_called()
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.RECEIVED

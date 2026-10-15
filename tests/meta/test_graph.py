@@ -99,3 +99,8 @@ def test_http_429_is_transient_without_error_code():
     with pytest.raises(GraphError) as info:
         GraphClient("v21.0", "tok").get_lead("333")
     assert info.value.is_transient
+
+
+def test_client_for_page_falls_back_to_system_user_token():
+    page = make_page(page_token="")
+    assert client_for_page(page).access_token == "system-user-token"

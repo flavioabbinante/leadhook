@@ -28,7 +28,10 @@ def route_lead(lead_id: int) -> None:
             deliver.delay(delivery.pk)
 
 
-@shared_task(bind=True, max_retries=len(DELIVERY_BACKOFF))
+# Retry decisions come from Delivery.attempts - Delivery.retry_base, never from
+# self.request.retries, which restarts at 0 on every fresh dispatch (route_lead, resend).
+# max_retries=None so Celery's own limit never interferes.
+@shared_task(bind=True, max_retries=None)
 def deliver(self, delivery_id: int) -> None:
     delivery = Delivery.objects.select_related("lead__page", "lead__form", "destination").get(
         pk=delivery_id
@@ -39,12 +42,14 @@ def deliver(self, delivery_id: int) -> None:
     if result.outcome == "skip":
         return
     if result.outcome == "retry":
-        if self.request.retries >= self.max_retries:
+        # 0 after the first attempt of a cycle; a cycle allows len(DELIVERY_BACKOFF) + 1 attempts.
+        retry_index = delivery.attempts - delivery.retry_base - 1
+        if retry_index >= len(DELIVERY_BACKOFF):
             mark_delivery_failed(
                 delivery, f"Gave up after {delivery.attempts} attempts: {result.error}"
             )
         else:
-            delay = next_retry_delay(self.request.retries, result.retry_after)
+            delay = next_retry_delay(retry_index, result.retry_after)
             schedule_retry(delivery, delay)
             raise self.retry(countdown=delay)
     refresh_lead_status(delivery.lead)

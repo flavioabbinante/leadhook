@@ -59,3 +59,19 @@ def test_parse_meta_time():
     assert parse_meta_time("2026-10-15T08:30:00+0000") == datetime(2026, 10, 15, 8, 30, tzinfo=UTC)
     assert parse_meta_time(None) is None
     assert parse_meta_time("") is None
+
+
+def test_extract_skips_changes_whose_value_is_not_an_object():
+    payload = {
+        "entry": [
+            {
+                "id": "111",
+                "changes": [
+                    {"field": "leadgen", "value": "nope"},
+                    {"field": "leadgen", "value": ["x"]},
+                    {"field": "leadgen", "value": {"leadgen_id": "9", "form_id": "2"}},
+                ],
+            }
+        ]
+    }
+    assert [c.leadgen_id for c in extract_leadgen_changes(payload)] == ["9"]

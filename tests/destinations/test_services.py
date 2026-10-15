@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest import mock
 
 import responses
 
@@ -157,3 +158,106 @@ def test_create_deliveries_does_not_downgrade_finished_lead():
     create_deliveries(lead)
     lead.refresh_from_db()
     assert lead.status == Lead.Status.DELIVERED
+
+
+def _assert_failed_and_released(delivery: Delivery, result) -> None:
+    delivery.refresh_from_db()
+    assert result.outcome == "fail"
+    assert delivery.status == Delivery.Status.FAILED
+    assert delivery.locked_until is None
+    assert delivery.attempts == 1
+
+
+def test_non_latin1_extra_header_fails_delivery_instead_of_crashing():
+    # Real socket path (no HTTP mock): http.client rejects the header before connecting.
+    delivery = _delivery(url="http://hooks.example.com/lead", extra_headers={"X-Name": "caf€"})
+    result = attempt_delivery(delivery, now=NOW)
+    _assert_failed_and_released(delivery, result)
+    assert "UnicodeEncodeError" in delivery.last_error
+    assert "Latin-1" in delivery.last_error
+
+
+def test_non_latin1_secret_is_never_echoed_in_error():
+    delivery = _delivery(
+        url="http://hooks.example.com/lead",
+        auth_type=Destination.AuthType.BEARER,
+        secret="t€kenSECRET",
+    )
+    result = attempt_delivery(delivery, now=NOW)
+    _assert_failed_and_released(delivery, result)
+    assert "SECRET" not in delivery.last_error
+    assert "€" not in delivery.last_error
+
+
+def test_zero_timeout_fails_delivery_instead_of_crashing():
+    delivery = _delivery(timeout_s=0)
+    result = attempt_delivery(delivery, now=NOW)
+    _assert_failed_and_released(delivery, result)
+    assert "ValueError" in delivery.last_error
+
+
+def test_unexpected_error_redacts_secret():
+    delivery = _delivery(auth_type=Destination.AuthType.BEARER, secret="hunter2-secret")
+    with mock.patch(
+        "leadhook.destinations.services.send_request",
+        side_effect=RuntimeError("boom with hunter2-secret inside"),
+    ):
+        result = attempt_delivery(delivery, now=NOW)
+    _assert_failed_and_released(delivery, result)
+    assert "RuntimeError" in delivery.last_error
+    assert "hunter2-secret" not in delivery.last_error
+    assert "***" in delivery.last_error
+
+
+def test_unexpected_render_error_fails_delivery():
+    delivery = _delivery()
+    with mock.patch("leadhook.destinations.services.render_body", side_effect=KeyError("missing")):
+        result = attempt_delivery(delivery, now=NOW)
+    _assert_failed_and_released(delivery, result)
+    assert "KeyError" in delivery.last_error
+
+
+def test_template_error_goes_through_mark_delivery_failed():
+    delivery = _delivery(payload_template='{"a": {{ id }')
+    with mock.patch(
+        "leadhook.destinations.services.mark_delivery_failed", wraps=mark_delivery_failed
+    ) as spy:
+        attempt_delivery(delivery, now=NOW)
+    spy.assert_called_once()
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.FAILED
+    assert delivery.locked_until is None
+
+
+def test_create_deliveries_finalizes_lead_when_nothing_is_pending():
+    lead = make_lead(status=Lead.Status.ROUTED)
+    destination = make_destination()
+    lead.page.default_destinations.add(destination)
+    Delivery.objects.create(lead=lead, destination=destination, status=Delivery.Status.SUCCESS)
+    assert create_deliveries(lead) == []
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.DELIVERED
+
+
+def test_reset_for_resend_refuses_pending_delivery():
+    delivery = _delivery()
+    lease = NOW + timedelta(seconds=60)
+    Delivery.objects.filter(pk=delivery.pk).update(
+        attempts=2, locked_until=lease, next_retry_at=NOW
+    )
+    delivery.refresh_from_db()
+    assert reset_for_resend(delivery) is False
+    delivery.refresh_from_db()
+    assert delivery.locked_until == lease
+    assert delivery.next_retry_at == NOW
+    assert delivery.retry_base == 0
+
+
+def test_reset_for_resend_restarts_retry_budget():
+    delivery = _delivery()
+    Delivery.objects.filter(pk=delivery.pk).update(attempts=7, status=Delivery.Status.FAILED)
+    delivery.refresh_from_db()
+    assert reset_for_resend(delivery) is True
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.PENDING
+    assert delivery.retry_base == 7

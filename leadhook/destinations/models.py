@@ -1,9 +1,21 @@
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from leadhook.core.fields import EncryptedTextField
 from leadhook.core.models import Workspace
 from leadhook.leads.models import Lead
+
+
+def _header_text_problem(value: str) -> str | None:
+    """Why a header name or value cannot be sent over HTTP/1.1, or None if it can."""
+    if "\r" in value or "\n" in value:
+        return "must not contain line breaks"
+    try:
+        value.encode("latin-1")
+    except UnicodeEncodeError:
+        return "may only contain Latin-1 characters"
+    return None
 
 
 class Destination(models.Model):
@@ -46,7 +58,11 @@ class Destination(models.Model):
         blank=True,
         help_text="Optional Jinja2 expression, e.g. response.success == true. Empty means any 2xx.",
     )
-    timeout_s = models.PositiveIntegerField("Timeout (seconds)", default=15)
+    timeout_s = models.PositiveIntegerField(
+        "Timeout (seconds)",
+        default=15,
+        validators=[MinValueValidator(1), MaxValueValidator(120)],
+    )
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -61,6 +77,29 @@ class Destination(models.Model):
             errors["secret"] = "Required for the selected authentication."
         if not isinstance(self.extra_headers, dict):
             errors["extra_headers"] = "Must be a JSON object."
+        else:
+            for name, value in self.extra_headers.items():
+                if not str(name).strip():
+                    errors["extra_headers"] = "Header names must not be empty."
+                    break
+                problem = _header_text_problem(str(name))
+                if problem:
+                    errors["extra_headers"] = f"Header name {name!r} {problem}."
+                    break
+                problem = _header_text_problem(str(value))
+                if problem:
+                    errors["extra_headers"] = f"Value of header {name!r} {problem}."
+                    break
+        if self.auth_type == self.AuthType.HEADER and self.auth_header_name:
+            problem = _header_text_problem(self.auth_header_name)
+            if problem:
+                errors["auth_header_name"] = f"The header name {problem}."
+        # Bearer tokens and custom header values are sent as header values; HMAC keys are not.
+        if self.auth_type in (self.AuthType.BEARER, self.AuthType.HEADER) and self.secret:
+            problem = _header_text_problem(self.secret)
+            if problem:
+                # Never echo the secret itself.
+                errors["secret"] = f"The secret is sent as a header value and {problem}."
         if errors:
             raise ValidationError(errors)
 
@@ -79,6 +118,8 @@ class Delivery(models.Model):
         max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
     )
     attempts = models.PositiveIntegerField(default=0)
+    # Value of `attempts` when the current retry cycle started (bumped by a manual resend).
+    retry_base = models.PositiveIntegerField(default=0)
     next_retry_at = models.DateTimeField(null=True, blank=True)
     # Lease held by the worker currently sending; a crashed worker's lease simply expires.
     locked_until = models.DateTimeField(null=True, blank=True)
