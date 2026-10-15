@@ -3,6 +3,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.urls import reverse
 
 from leadhook.core.fields import EncryptedTextField
 from leadhook.core.models import Workspace
@@ -39,6 +40,9 @@ class MetaApp(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.app_id})"
+
+    def webhook_url(self) -> str:
+        return settings.PUBLIC_BASE_URL + reverse("meta-webhook", args=[self.webhook_uuid])
 
 
 class Page(models.Model):
