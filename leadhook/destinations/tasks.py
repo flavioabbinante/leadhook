@@ -17,8 +17,10 @@ from .services import (
 @shared_task
 def route_lead(lead_id: int) -> None:
     lead = Lead.objects.select_related("page", "form").get(pk=lead_id)
-    if lead.status not in (Lead.Status.FETCHED, Lead.Status.UNROUTED):
+    if lead.status not in (Lead.Status.FETCHED, Lead.Status.UNROUTED, Lead.Status.ROUTED):
         return
+    # ROUTED is accepted so a lost deliver dispatch is recovered on redelivery;
+    # create_deliveries is idempotent and deliver ignores non-pending deliveries.
     for delivery in create_deliveries(lead):
         deliver.delay(delivery.pk)
 
@@ -31,6 +33,8 @@ def deliver(self, delivery_id: int) -> None:
     if delivery.status != Delivery.Status.PENDING:
         return
     result = attempt_delivery(delivery)
+    if result.outcome == "skip":
+        return
     if result.outcome == "retry":
         if self.request.retries >= self.max_retries:
             mark_delivery_failed(

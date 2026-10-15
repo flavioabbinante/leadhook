@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from django.db.models import F
 from django.utils import timezone
 
 from leadhook.leads.models import Lead
@@ -35,6 +36,14 @@ def create_deliveries(lead: Lead) -> list[Delivery]:
 
 def attempt_delivery(delivery: Delivery, *, now: datetime | None = None) -> SendResult:
     now = now or timezone.now()
+    # Atomically claim this attempt: if another worker already took it, do not send.
+    # A crash after the POST but before the result is saved can still cause a resend
+    # (inherent to acks_late); receivers dedupe on the Idempotency-Key header.
+    claimed = Delivery.objects.filter(
+        pk=delivery.pk, status=Delivery.Status.PENDING, attempts=delivery.attempts
+    ).update(attempts=F("attempts") + 1, updated_at=now)
+    if not claimed:
+        return SendResult("skip", error="Attempt claimed by another worker")
     delivery.attempts += 1
     destination = delivery.destination
     context = build_context(delivery.lead, delivery, attempt=delivery.attempts, sent_at=now)
@@ -86,6 +95,7 @@ def mark_delivery_failed(delivery: Delivery, error: str) -> None:
 
 
 def refresh_lead_status(lead: Lead) -> None:
+    lead.refresh_from_db(fields=["status"])
     statuses = set(lead.deliveries.values_list("status", flat=True))
     if not statuses or Delivery.Status.PENDING in statuses:
         return

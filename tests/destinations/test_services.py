@@ -133,3 +133,14 @@ def test_reset_for_resend():
 
 def test_destination_kind_is_webhook_by_default():
     assert make_destination().kind == Destination.Kind.WEBHOOK
+
+
+def test_refresh_lead_status_ignores_stale_in_memory_status():
+    lead = make_lead(status=Lead.Status.DELIVERED)
+    Delivery.objects.create(
+        lead=lead, destination=make_destination(), status=Delivery.Status.SUCCESS
+    )
+    # another worker moved the lead back to ROUTED; our in-memory copy still says DELIVERED
+    Lead.objects.filter(pk=lead.pk).update(status=Lead.Status.ROUTED)
+    refresh_lead_status(lead)
+    assert Lead.objects.get(pk=lead.pk).status == Lead.Status.DELIVERED

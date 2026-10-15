@@ -18,6 +18,11 @@ def process_event(event_id: int) -> None:
             form_external_id=change.form_id,
             source=Lead.Source.WEBHOOK,
         )
+        if lead is None:
+            # Redelivered event: the earlier fetch dispatch may have been lost.
+            lead = Lead.objects.filter(
+                leadgen_id=change.leadgen_id, status=Lead.Status.RECEIVED
+            ).first()
         if lead is not None:
             fetch_lead.delay(lead.pk)
     event.processed_at = timezone.now()
