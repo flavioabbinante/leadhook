@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import ipaddress
+import re
 import socket
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -19,6 +20,7 @@ from .templating import TemplateError, evaluate_condition
 
 RESPONSE_BODY_LIMIT = 4096
 RETRYABLE_STATUS_CODES = {408, 429}
+MAX_RETRY_AFTER = 86400
 
 
 @dataclass
@@ -43,17 +45,28 @@ def check_destination_url(url: str) -> None:
 
     DNS failures raise OSError, which callers treat as a retryable network error.
     """
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        raise BlockedDestination(f"Unsupported destination URL: {url}")
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+        hostname = parts.hostname
+    except ValueError:
+        raise BlockedDestination("Invalid destination URL (malformed host or port)") from None
+    # Never echo credentials, path or query from the URL in messages.
+    shown = f"{parts.scheme}://{hostname}"
+    if parts.scheme not in ("http", "https") or not hostname:
+        raise BlockedDestination(f"Unsupported destination URL ({shown})")
     if settings.ALLOW_PRIVATE_DESTINATIONS:
         return
-    port = parts.port or (443 if parts.scheme == "https" else 80)
-    for address in resolve_host(parts.hostname, port):
+    port = port or (443 if parts.scheme == "https" else 80)
+    try:
+        addresses = resolve_host(hostname, port)
+    except UnicodeError:
+        raise BlockedDestination(f"Invalid destination host name ({shown})") from None
+    for address in addresses:
         ip = ipaddress.ip_address(address.split("%", 1)[0])
         if not ip.is_global:
             raise BlockedDestination(
-                f"Destination resolves to a non-public address ({ip}). "
+                f"Destination {shown} resolves to a non-public address ({ip}). "
                 "Set ALLOW_PRIVATE_DESTINATIONS=true to allow it."
             )
 
@@ -86,13 +99,16 @@ def build_headers(
 def parse_retry_after(value: str | None) -> int | None:
     if not value:
         return None
-    if value.strip().isdigit():
-        return int(value)
+    value = value.strip()
+    if re.fullmatch(r"\d+", value, re.ASCII):
+        return min(int(value), MAX_RETRY_AFTER)
     try:
         moment = parsedate_to_datetime(value)
     except (TypeError, ValueError):
         return None
-    return max(0, int((moment - datetime.now(UTC)).total_seconds()))
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return min(MAX_RETRY_AFTER, max(0, int((moment - datetime.now(UTC)).total_seconds())))
 
 
 def send_request(destination: Destination, body: str, headers: dict) -> SendResult:
@@ -104,14 +120,17 @@ def send_request(destination: Destination, body: str, headers: dict) -> SendResu
         return SendResult("retry", error=f"DNS resolution failed: {exc}")
 
     try:
-        response = requests.request(
-            destination.method,
-            destination.url,
-            data=body.encode("utf-8"),
-            headers=headers,
-            timeout=destination.timeout_s,
-            allow_redirects=False,
-        )
+        with requests.Session() as session:
+            # Ignore HTTP(S)_PROXY and .netrc so the request goes where the SSRF guard checked.
+            session.trust_env = False
+            response = session.request(
+                destination.method,
+                destination.url,
+                data=body.encode("utf-8"),
+                headers=headers,
+                timeout=destination.timeout_s,
+                allow_redirects=False,
+            )
     except requests.RequestException as exc:
         return SendResult("retry", error=f"{type(exc).__name__}: {exc}")
 

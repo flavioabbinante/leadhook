@@ -91,3 +91,11 @@ def test_client_for_page_uses_page_token_and_app_version():
     client = client_for_page(page)
     assert client.access_token == "page-token"
     assert client.version == "v21.0"
+
+
+@responses.activate
+def test_http_429_is_transient_without_error_code():
+    responses.get(f"{BASE}/333", status=429, body="Too Many Requests")
+    with pytest.raises(GraphError) as info:
+        GraphClient("v21.0", "tok").get_lead("333")
+    assert info.value.is_transient
