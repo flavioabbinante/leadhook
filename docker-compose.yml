@@ -17,7 +17,8 @@ services:
     <<: *app
     command: web
     ports:
-      - "8000:8000"
+      # Local interface only: put a reverse proxy (Caddy, Traefik, nginx) in front for HTTPS.
+      - "127.0.0.1:8000:8000"
   worker:
     <<: *app
     command: worker
