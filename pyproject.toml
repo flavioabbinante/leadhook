@@ -37,7 +37,7 @@ filterwarnings = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["**/migrations/*.py"]
+extend-exclude = ["**/migrations/*.py", "docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
