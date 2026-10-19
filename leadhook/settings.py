@@ -139,6 +139,7 @@ SILENCE_ALERT_HOURS = env.int("SILENCE_ALERT_HOURS", default=24)
 # Periodic tasks; every task adds its own entry (intervals in seconds).
 CELERY_BEAT_SCHEDULE = {
     "heartbeat": {"task": "leadhook.core.tasks.heartbeat", "schedule": 60.0},
+    "reconcile-leads": {"task": "leadhook.leads.tasks.reconcile_leads", "schedule": 900.0},
 }
 
 META_GRAPH_VERSION = env("META_GRAPH_VERSION", default="v26.0")
