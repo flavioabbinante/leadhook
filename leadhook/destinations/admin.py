@@ -102,7 +102,7 @@ class DeliveryAdmin(admin.ModelAdmin):
                 skipped += 1
         message = f"{count} deliveries queued for resending."
         if skipped:
-            message += f" {skipped} skipped (already in progress or scheduled)."
+            message += f" {skipped} skipped (in progress, scheduled, or lead data purged)."
         self.message_user(request, message)
 
 

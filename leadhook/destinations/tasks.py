@@ -24,6 +24,8 @@ SWEEP_BATCH = 500
 @shared_task
 def route_lead(lead_id: int) -> None:
     lead = Lead.objects.select_related("page", "form").get(pk=lead_id)
+    if lead.purged_at is not None:
+        return
     if lead.status not in (Lead.Status.FETCHED, Lead.Status.UNROUTED, Lead.Status.ROUTED):
         return
     # ROUTED is accepted so a lost deliver dispatch is recovered on redelivery;
@@ -43,6 +45,12 @@ def deliver(self, delivery_id: int) -> None:
         pk=delivery_id
     )
     if delivery.status != Delivery.Status.PENDING:
+        return
+    if delivery.lead.purged_at is not None:
+        mark_delivery_failed(
+            delivery, "Lead data was purged by the retention policy before delivery"
+        )
+        refresh_lead_status(delivery.lead)
         return
     result = attempt_delivery(delivery)
     if result.outcome == "skip":

@@ -189,7 +189,9 @@ def test_resend_action_skips_deliveries_in_progress_or_scheduled(admin_client):
     assert in_flight.locked_until == lease
     messages = [str(m) for m in get_messages(response.wsgi_request)]
     assert any(
-        "2 deliveries queued" in m and "1 skipped" in m and "already in progress or scheduled" in m
+        "2 deliveries queued" in m
+        and "1 skipped" in m
+        and "in progress, scheduled, or lead data purged" in m
         for m in messages
     )
 
