@@ -143,6 +143,7 @@ CELERY_BEAT_SCHEDULE = {
     "sync-forms": {"task": "leadhook.meta.tasks.sync_forms", "schedule": 3600.0},
     "check-pages": {"task": "leadhook.meta.tasks.check_pages", "schedule": 86400.0},
     "check-silence": {"task": "leadhook.meta.tasks.check_silence", "schedule": 3600.0},
+    "sweep-stuck-work": {"task": "leadhook.destinations.tasks.sweep_stuck_work", "schedule": 300.0},
 }
 
 META_GRAPH_VERSION = env("META_GRAPH_VERSION", default="v26.0")
