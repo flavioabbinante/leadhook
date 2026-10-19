@@ -3,12 +3,11 @@
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from django.db import models
 from django.utils import timezone
 
 from leadhook.meta.graph import GraphClient, GraphError, client_for_page
 from leadhook.meta.models import Form, Page
-from leadhook.meta.services import record_page_error
+from leadhook.meta.services import fit_to_field, record_page_error
 
 from .models import Lead
 from .parsing import parse_meta_time, simplify_field_data
@@ -40,12 +39,6 @@ def ingest_lead(
     return lead if created else None
 
 
-def _fit(model: type[models.Model], field: str, value) -> str:
-    """Coerce a Graph API value to text that fits the field (Meta names can be longer)."""
-    text = "" if value is None else str(value)
-    return text[: model._meta.get_field(field).max_length]
-
-
 def _resolve_page(lead: Lead) -> Page | None:
     if lead.page is not None:
         return lead.page
@@ -66,9 +59,9 @@ def _get_or_create_form(page: Page, form_external_id: str, client: GraphClient) 
         form_id=form_external_id,
         defaults={
             "page": page,
-            "name": _fit(Form, "name", raw.get("name")),
-            "locale": _fit(Form, "locale", raw.get("locale")),
-            "status": _fit(Form, "status", raw.get("status")),
+            "name": fit_to_field(Form, "name", raw.get("name")),
+            "locale": fit_to_field(Form, "locale", raw.get("locale")),
+            "status": fit_to_field(Form, "status", raw.get("status")),
             "last_synced_at": timezone.now() if raw else None,
         },
     )
@@ -107,7 +100,7 @@ def store_lead_details(lead: Lead, page: Page, raw: dict, client: GraphClient) -
     lead.page = page
     lead.created_time = parse_meta_time(raw.get("created_time"))
     for name in ("ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"):
-        setattr(lead, name, _fit(Lead, name, raw.get(name)))
+        setattr(lead, name, fit_to_field(Lead, name, raw.get(name)))
     lead.is_organic = bool(raw.get("is_organic", False))
     lead.field_data = raw.get("field_data") or []
     lead.data = simplify_field_data(lead.field_data)
