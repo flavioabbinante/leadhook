@@ -1,9 +1,30 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.urls import reverse
+from django.utils.html import format_html
 
 from leadhook.core.admin_forms import SecretAwareModelForm
 from leadhook.core.models import get_default_workspace
+from leadhook.leads.models import Lead
 
 from .models import Form, MetaApp, Page
+
+
+def _offer_unrouted_leads(modeladmin, request, leads, lead_filter: str) -> None:
+    """Spec §4: once destinations exist, point to the leads that waited for one."""
+    count = leads.filter(status=Lead.Status.UNROUTED).count()
+    if not count:
+        return
+    url = reverse("admin:leads_lead_changelist") + f"?status__exact=unrouted&{lead_filter}"
+    modeladmin.message_user(
+        request,
+        format_html(
+            '{} unrouted lead(s) can now be delivered: <a href="{}">select them and run '
+            "“Reprocess selected leads”</a>.",
+            count,
+            url,
+        ),
+        messages.WARNING,
+    )
 
 
 class MetaAppForm(SecretAwareModelForm):
@@ -58,7 +79,13 @@ class PageAdmin(admin.ModelAdmin):
     list_filter = ("subscribed", "meta_app")
     search_fields = ("name", "page_id")
     filter_horizontal = ("default_destinations",)
-    readonly_fields = ("last_checked_at", "last_lead_at", "error")
+    readonly_fields = ("last_checked_at", "last_lead_at", "error", "silence_alerted_at")
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        page = form.instance
+        if page.default_destinations.filter(active=True).exists():
+            _offer_unrouted_leads(self, request, page.leads.all(), f"page__id__exact={page.pk}")
 
 
 @admin.register(Form)
@@ -67,4 +94,12 @@ class FormAdmin(admin.ModelAdmin):
     list_filter = ("page", "status")
     search_fields = ("name", "form_id")
     filter_horizontal = ("destinations",)
-    readonly_fields = ("last_synced_at",)
+    readonly_fields = ("last_synced_at", "last_reconciled_at")
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        lead_form = form.instance
+        if lead_form.destinations.filter(active=True).exists():
+            _offer_unrouted_leads(
+                self, request, lead_form.leads.all(), f"form__id__exact={lead_form.pk}"
+            )

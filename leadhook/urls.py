@@ -8,6 +8,7 @@ from leadhook.meta.views import meta_webhook
 admin.site.site_header = "LeadHook"
 admin.site.site_title = "LeadHook"
 admin.site.index_title = "Administration"
+admin.site.index_template = "admin/leadhook_index.html"
 
 urlpatterns = [
     path("", RedirectView.as_view(url="/admin/", permanent=False)),
