@@ -13,6 +13,8 @@ from .models import Lead
 
 
 def dashboard_stats(now: datetime) -> dict:
+    from leadhook.meta.setup import setup_complete  # meta.setup imports leads models
+
     day_start = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
     recent = Lead.objects.filter(received_at__gte=week_start)
@@ -32,4 +34,5 @@ def dashboard_stats(now: datetime) -> dict:
         ).count(),
         "pages": Page.objects.order_by("name", "page_id"),
         "beat_ok": heartbeat_is_fresh(),
+        "setup_complete": setup_complete(),
     }
