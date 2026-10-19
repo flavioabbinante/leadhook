@@ -371,7 +371,9 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_HTTPONLY = True
 if not DEBUG:
     SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
-    SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000) if SECURE_SSL_REDIRECT else 0
+    SECURE_HSTS_SECONDS = (
+        env.int("SECURE_HSTS_SECONDS", default=31536000) if SECURE_SSL_REDIRECT else 0
+    )
     SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
     CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
 
@@ -1117,8 +1119,12 @@ class Lead(models.Model):
         MANUAL = "manual", "Manual"
 
     leadgen_id = models.CharField("Lead ID", max_length=64, unique=True)
-    page = models.ForeignKey(Page, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
-    form = models.ForeignKey(Form, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
+    page = models.ForeignKey(
+        Page, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
+    )
+    form = models.ForeignKey(
+        Form, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
+    )
     page_external_id = models.CharField("Meta page ID", max_length=64, blank=True)
     form_external_id = models.CharField("Meta form ID", max_length=64, blank=True)
     created_time = models.DateTimeField(null=True, blank=True)
@@ -1293,7 +1299,9 @@ def test_delivery_public_id():
 def test_destination_secret_is_encrypted_at_rest():
     destination = make_destination(auth_type=Destination.AuthType.BEARER, secret="s3cret-value")
     with connection.cursor() as cursor:
-        cursor.execute("SELECT secret FROM destinations_destination WHERE id = %s", [destination.pk])
+        cursor.execute(
+            "SELECT secret FROM destinations_destination WHERE id = %s", [destination.pk]
+        )
         assert cursor.fetchone()[0] != "s3cret-value"
 
 
@@ -1317,8 +1325,11 @@ def test_page_and_form_destination_links():
 )
 def test_destination_clean_requires_auth_details(auth_type, header_name, secret, error_field):
     destination = Destination(
-        name="x", url="https://a.example.com", auth_type=auth_type,
-        auth_header_name=header_name, secret=secret,
+        name="x",
+        url="https://a.example.com",
+        auth_type=auth_type,
+        auth_header_name=header_name,
+        secret=secret,
     )
     with pytest.raises(ValidationError) as excinfo:
         destination.clean()
@@ -1376,10 +1387,13 @@ class Destination(models.Model):
         blank=True, help_text="Header value, bearer token or HMAC key, depending on authentication."
     )
     extra_headers = models.JSONField(
-        default=dict, blank=True, help_text='Additional headers as a JSON object, e.g. {"X-Source": "leadhook"}.'
+        default=dict,
+        blank=True,
+        help_text='Additional headers as a JSON object, e.g. {"X-Source": "leadhook"}.',
     )
     payload_template = models.TextField(
-        blank=True, help_text="Jinja2 template producing JSON. Leave empty for the standard payload."
+        blank=True,
+        help_text="Jinja2 template producing JSON. Leave empty for the standard payload.",
     )
     success_condition = models.TextField(
         blank=True,
@@ -1411,7 +1425,9 @@ class Delivery(models.Model):
         FAILED = "failed", "Failed"
 
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="deliveries")
-    destination = models.ForeignKey(Destination, on_delete=models.CASCADE, related_name="deliveries")
+    destination = models.ForeignKey(
+        Destination, on_delete=models.CASCADE, related_name="deliveries"
+    )
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
     )
@@ -1429,7 +1445,9 @@ class Delivery(models.Model):
         verbose_name_plural = "deliveries"
         ordering = ["-created_at"]
         constraints = [
-            models.UniqueConstraint(fields=["lead", "destination"], name="unique_delivery_per_destination")
+            models.UniqueConstraint(
+                fields=["lead", "destination"], name="unique_delivery_per_destination"
+            )
         ]
 
     def __str__(self) -> str:
@@ -1528,7 +1546,9 @@ def test_token_error_is_detected():
     responses.get(
         f"{BASE}/333",
         status=400,
-        json={"error": {"message": "Error validating access token", "code": 190, "error_subcode": 463}},
+        json={
+            "error": {"message": "Error validating access token", "code": 190, "error_subcode": 463}
+        },
     )
     with pytest.raises(GraphError) as excinfo:
         GraphClient("v21.0", "tok").get_lead("333")
@@ -1559,7 +1579,9 @@ def test_transient_errors(status, body):
 
 @responses.activate
 def test_permission_error_is_permanent():
-    responses.get(f"{BASE}/333", status=400, json={"error": {"message": "No permission", "code": 200}})
+    responses.get(
+        f"{BASE}/333", status=400, json={"error": {"message": "No permission", "code": 200}}
+    )
     with pytest.raises(GraphError) as excinfo:
         GraphClient("v21.0", "tok").get_lead("333")
     assert not excinfo.value.is_transient
@@ -1645,7 +1667,9 @@ class GraphClient:
         try:
             response = requests.get(url, params=query, timeout=self.timeout)
         except requests.RequestException as exc:
-            raise GraphError(self._redact(f"{type(exc).__name__}: {exc}"), status=None, code=None) from None
+            raise GraphError(
+                self._redact(f"{type(exc).__name__}: {exc}"), status=None, code=None
+            ) from None
         try:
             body = response.json()
         except ValueError:
@@ -1840,7 +1864,12 @@ def test_standard_payload_matches_n8n_simplified_shape():
     assert context["id"] == "333"
     assert context["created_time"] == "2026-10-15T08:30:00+0000"
     assert context["data"] == {"full_name": "Jane Doe"}
-    assert context["form"] == {"id": "222", "name": "Test form", "locale": "en_US", "status": "ACTIVE"}
+    assert context["form"] == {
+        "id": "222",
+        "name": "Test form",
+        "locale": "en_US",
+        "status": "ACTIVE",
+    }
     assert context["page"] == {"id": "111", "name": "Test page"}
     assert context["ad"] == {"id": "444", "name": "Ad 1"}
     assert context["adset"] == {"id": "555", "name": "Ad set 1"}
@@ -1921,8 +1950,12 @@ def test_crm_style_template():
 
 
 def test_phone_strip_prefix_handles_00_form_and_missing_prefix():
-    assert render('{"a": {{ "0039 333 1234567" | phone_strip_prefix("+39") | tojson }}}') == {"a": "3331234567"}
-    assert render('{"a": {{ "333 1234567" | phone_strip_prefix("+39") | tojson }}}') == {"a": "3331234567"}
+    assert render('{"a": {{ "0039 333 1234567" | phone_strip_prefix("+39") | tojson }}}') == {
+        "a": "3331234567"
+    }
+    assert render('{"a": {{ "333 1234567" | phone_strip_prefix("+39") | tojson }}}') == {
+        "a": "3331234567"
+    }
 
 
 def test_date_filter_converts_timezone():
@@ -1942,7 +1975,9 @@ def test_map_value_filter_maps_scalars_and_lists():
 
 
 def test_missing_values_render_as_empty_strings():
-    assert render('{"a": {{ data.missing | tojson }}, "b": {{ data.missing.deeper | tojson }}}') == {
+    assert render(
+        '{"a": {{ data.missing | tojson }}, "b": {{ data.missing.deeper | tojson }}}'
+    ) == {
         "a": "",
         "b": "",
     }
@@ -1974,8 +2009,12 @@ def test_sandbox_blocks_python_internals():
 
 
 def test_condition_true_and_false():
-    assert evaluate_condition("response.success == true", response={"success": True}, status_code=200)
-    assert not evaluate_condition("response.success == true", response={"success": False}, status_code=200)
+    assert evaluate_condition(
+        "response.success == true", response={"success": True}, status_code=200
+    )
+    assert not evaluate_condition(
+        "response.success == true", response={"success": False}, status_code=200
+    )
 
 
 def test_condition_with_non_json_response_is_false():
@@ -2045,7 +2084,7 @@ def _phone_strip_prefix(value, prefix: str) -> str:
         prefixes.append("00" + prefix[1:])
     for candidate in prefixes:
         if number.startswith(candidate):
-            return number[len(candidate):]
+            return number[len(candidate) :]
     return number
 
 
@@ -2257,7 +2296,9 @@ def test_custom_header_auth():
     destination = make_destination(
         auth_type=Destination.AuthType.HEADER, auth_header_name="X-N8N-Key", secret="k"
     )
-    assert build_headers(destination, body="{}", timestamp=1, idempotency_key="1")["X-N8N-Key"] == "k"
+    assert (
+        build_headers(destination, body="{}", timestamp=1, idempotency_key="1")["X-N8N-Key"] == "k"
+    )
 
 
 def test_hmac_signature_can_be_verified_by_receiver():
@@ -2364,7 +2405,12 @@ def test_private_addresses_are_blocked(fake_dns):
     fake_dns["internal.test"] = "10.0.0.5"
     with pytest.raises(BlockedDestination):
         check_destination_url("https://internal.test/hook")
-    for url in ["http://127.0.0.1/", "http://169.254.169.254/latest", "http://[::1]/", "http://192.168.1.10/"]:
+    for url in [
+        "http://127.0.0.1/",
+        "http://169.254.169.254/latest",
+        "http://[::1]/",
+        "http://192.168.1.10/",
+    ]:
         with pytest.raises(BlockedDestination):
             check_destination_url(url)
 
@@ -2537,7 +2583,9 @@ def send_request(destination: Destination, body: str, headers: dict) -> SendResu
             except ValueError:
                 parsed = None
             try:
-                ok = evaluate_condition(destination.success_condition, response=parsed, status_code=status)
+                ok = evaluate_condition(
+                    destination.success_condition, response=parsed, status_code=status
+                )
             except TemplateError as exc:
                 return SendResult("fail", status, str(exc), text)
             if not ok:
@@ -2607,8 +2655,12 @@ def _received_lead(**kwargs) -> Lead:
 
 
 def test_ingest_lead_is_idempotent():
-    first = ingest_lead(leadgen_id="333", page_external_id="111", form_external_id="222", source="webhook")
-    second = ingest_lead(leadgen_id="333", page_external_id="111", form_external_id="222", source="reconcile")
+    first = ingest_lead(
+        leadgen_id="333", page_external_id="111", form_external_id="222", source="webhook"
+    )
+    second = ingest_lead(
+        leadgen_id="333", page_external_id="111", form_external_id="222", source="reconcile"
+    )
     assert first is not None
     assert second is None
     assert Lead.objects.get().source == Lead.Source.WEBHOOK
@@ -2657,7 +2709,9 @@ def test_fetch_lead_for_unknown_page_keeps_lead():
 @responses.activate
 def test_token_error_flags_page_and_gives_up():
     page = make_page()
-    responses.get(f"{BASE}/333", status=400, json={"error": {"message": "Session expired", "code": 190}})
+    responses.get(
+        f"{BASE}/333", status=400, json={"error": {"message": "Session expired", "code": 190}}
+    )
     lead = _received_lead()
     assert fetch_lead_details(lead) == FetchOutcome.GIVE_UP
     page.refresh_from_db()
@@ -2795,7 +2849,9 @@ def test_schedule_retry_sets_next_retry_at():
 
 def test_refresh_lead_status():
     lead = make_lead(status=Lead.Status.ROUTED)
-    ok = Delivery.objects.create(lead=lead, destination=make_destination(), status=Delivery.Status.SUCCESS)
+    ok = Delivery.objects.create(
+        lead=lead, destination=make_destination(), status=Delivery.Status.SUCCESS
+    )
     other = Delivery.objects.create(lead=lead, destination=make_destination(name="b"))
     refresh_lead_status(lead)
     assert lead.status == Lead.Status.ROUTED  # one still pending
@@ -2843,7 +2899,9 @@ HOOK = "https://hooks.example.com/lead"
 
 
 def _event(payload=None, signature_ok=True) -> WebhookEvent:
-    return WebhookEvent.objects.create(payload=payload or leadgen_payload(), signature_ok=signature_ok)
+    return WebhookEvent.objects.create(
+        payload=payload or leadgen_payload(), signature_ok=signature_ok
+    )
 
 
 @responses.activate
@@ -3065,9 +3123,7 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
     """Read the lead from the Graph API and store its details."""
     page = _resolve_page(lead)
     if page is None:
-        lead.error = (
-            f"Unknown page {lead.page_external_id}: connect it in the admin, then reprocess the lead."
-        )
+        lead.error = f"Unknown page {lead.page_external_id}: connect it in the admin, then reprocess the lead."
         lead.save(update_fields=["error", "updated_at"])
         return FetchOutcome.GIVE_UP
 
@@ -3288,9 +3344,9 @@ def route_lead(lead_id: int) -> None:
 
 @shared_task(bind=True, max_retries=len(DELIVERY_BACKOFF))
 def deliver(self, delivery_id: int) -> None:
-    delivery = Delivery.objects.select_related(
-        "lead__page", "lead__form", "destination"
-    ).get(pk=delivery_id)
+    delivery = Delivery.objects.select_related("lead__page", "lead__form", "destination").get(
+        pk=delivery_id
+    )
     if delivery.status != Delivery.Status.PENDING:
         return
     result = attempt_delivery(delivery)
@@ -3386,7 +3442,8 @@ def test_webhook_url_uses_public_base_url():
 def test_verification_challenge(client):
     app = make_meta_app()
     response = client.get(
-        _url(app), {"hub.mode": "subscribe", "hub.verify_token": app.verify_token, "hub.challenge": "42"}
+        _url(app),
+        {"hub.mode": "subscribe", "hub.verify_token": app.verify_token, "hub.challenge": "42"},
     )
     assert response.status_code == 200
     assert response.content == b"42"
@@ -3403,7 +3460,9 @@ def test_verification_with_wrong_token_is_rejected(client):
 
 def test_unknown_webhook_uuid_returns_404(client):
     response = client.post(
-        "/webhooks/meta/00000000-0000-0000-0000-000000000000/", data=b"{}", content_type="application/json"
+        "/webhooks/meta/00000000-0000-0000-0000-000000000000/",
+        data=b"{}",
+        content_type="application/json",
     )
     assert response.status_code == 404
 
@@ -3415,7 +3474,9 @@ def test_signed_event_is_stored_and_processed(django_capture_on_commit_callbacks
     with mock.patch("leadhook.meta.views.process_event.delay") as delay:
         with django_capture_on_commit_callbacks(execute=True):
             response = csrf_client.post(
-                _url(app), data=body, content_type="application/json",
+                _url(app),
+                data=body,
+                content_type="application/json",
                 HTTP_X_HUB_SIGNATURE_256=sign(body),
             )
     assert response.status_code == 200
@@ -3432,7 +3493,9 @@ def test_bad_signature_is_stored_but_not_processed(client, django_capture_on_com
     with mock.patch("leadhook.meta.views.process_event.delay") as delay:
         with django_capture_on_commit_callbacks(execute=True):
             response = client.post(
-                _url(app), data=body, content_type="application/json",
+                _url(app),
+                data=body,
+                content_type="application/json",
                 HTTP_X_HUB_SIGNATURE_256=sign(body, secret="attacker"),
             )
     assert response.status_code == 200
@@ -3479,7 +3542,7 @@ def verify_signature(app_secret: str, raw_body: bytes, header: str | None) -> bo
     if not header or not header.startswith(PREFIX):
         return False
     expected = hmac.new(app_secret.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, header[len(PREFIX):])
+    return hmac.compare_digest(expected, header[len(PREFIX) :])
 ```
 
 `leadhook/meta/views.py`:
@@ -3542,7 +3605,7 @@ def meta_webhook(request: HttpRequest, webhook_uuid) -> HttpResponse:
 
 In `leadhook/urls.py` add the import `from leadhook.meta.views import meta_webhook` and the route:
 ```python
-    path("webhooks/meta/<uuid:webhook_uuid>/", meta_webhook, name="meta-webhook"),
+(path("webhooks/meta/<uuid:webhook_uuid>/", meta_webhook, name="meta-webhook"),)
 ```
 
 Add to `MetaApp` in `leadhook/meta/models.py` (imports `from django.urls import reverse` at the top):
@@ -3596,8 +3659,13 @@ def test_admin_pages_render(admin_client):
     destination = make_destination()
     Delivery.objects.create(lead=lead, destination=destination)
     for name in [
-        "meta_metaapp", "meta_page", "meta_form", "leads_lead", "leads_webhookevent",
-        "destinations_destination", "destinations_delivery",
+        "meta_metaapp",
+        "meta_page",
+        "meta_form",
+        "leads_lead",
+        "leads_webhookevent",
+        "destinations_destination",
+        "destinations_delivery",
     ]:
         assert admin_client.get(reverse(f"admin:{name}_changelist")).status_code == 200
         assert admin_client.get(reverse(f"admin:{name}_add")).status_code in (200, 403)
@@ -3698,7 +3766,10 @@ def test_reprocess_action_dispatches_by_status(admin_client):
     ):
         admin_client.post(
             reverse("admin:leads_lead_changelist"),
-            {"action": "reprocess", "_selected_action": [str(received.pk), str(unrouted.pk), str(delivered.pk)]},
+            {
+                "action": "reprocess",
+                "_selected_action": [str(received.pk), str(unrouted.pk), str(delivered.pk)],
+            },
         )
     fetch.assert_called_once_with(received.pk)
     route.assert_called_once_with(unrouted.pk)
@@ -3708,10 +3779,18 @@ def test_destination_form_validates_auth(admin_client):
     response = admin_client.post(
         reverse("admin:destinations_destination_add"),
         {
-            "name": "x", "kind": "webhook", "url": "https://a.example.com", "method": "POST",
-            "auth_type": Destination.AuthType.BEARER, "auth_header_name": "", "secret": "",
-            "extra_headers": "{}", "payload_template": "", "success_condition": "",
-            "timeout_s": "15", "active": "on",
+            "name": "x",
+            "kind": "webhook",
+            "url": "https://a.example.com",
+            "method": "POST",
+            "auth_type": Destination.AuthType.BEARER,
+            "auth_header_name": "",
+            "secret": "",
+            "extra_headers": "{}",
+            "payload_template": "",
+            "success_condition": "",
+            "timeout_s": "15",
+            "active": "on",
         },
     )
     assert response.status_code == 200
@@ -3885,7 +3964,9 @@ class DestinationAdmin(admin.ModelAdmin):
         lead = leads.filter(leadgen_id=lead_id).first() if lead_id else leads.first()
         if lead is None:
             return "No fetched leads yet."
-        context = build_context(lead, Delivery(lead=lead, destination=obj), attempt=1, sent_at=timezone.now())
+        context = build_context(
+            lead, Delivery(lead=lead, destination=obj), attempt=1, sent_at=timezone.now()
+        )
         try:
             body = json.dumps(json.loads(render_body(obj, context)), indent=2, ensure_ascii=False)
         except TemplateError as exc:
@@ -3900,7 +3981,15 @@ class DestinationAdmin(admin.ModelAdmin):
 
 @admin.register(Delivery)
 class DeliveryAdmin(admin.ModelAdmin):
-    list_display = ("lead", "destination", "status", "attempts", "last_status_code", "next_retry_at", "updated_at")
+    list_display = (
+        "lead",
+        "destination",
+        "status",
+        "attempts",
+        "last_status_code",
+        "next_retry_at",
+        "updated_at",
+    )
     list_filter = ("status", "destination")
     search_fields = ("lead__leadgen_id",)
     actions = ["resend"]
@@ -4043,7 +4132,11 @@ def receiver():
         def do_POST(self):
             body = self.rfile.read(int(self.headers["Content-Length"]))
             received.append(
-                {"headers": {k.lower(): v for k, v in self.headers.items()}, "raw": body, "json": json.loads(body)}
+                {
+                    "headers": {k.lower(): v for k, v in self.headers.items()},
+                    "raw": body,
+                    "json": json.loads(body),
+                }
             )
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -4100,7 +4193,9 @@ def test_end_to_end_lead_delivery(client, setup, django_capture_on_commit_callba
     assert payload["_leadhook"]["attempt"] == 1
 
     timestamp = request["headers"]["x-leadhook-timestamp"]
-    expected = hmac.new(b"hmac-key", f"{timestamp}.".encode() + request["raw"], hashlib.sha256).hexdigest()
+    expected = hmac.new(
+        b"hmac-key", f"{timestamp}.".encode() + request["raw"], hashlib.sha256
+    ).hexdigest()
     assert request["headers"]["x-leadhook-signature"] == f"sha256={expected}"
     assert request["headers"]["idempotency-key"] == "333"
 
