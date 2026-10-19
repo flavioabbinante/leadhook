@@ -1,6 +1,9 @@
 from celery import shared_task
+from django.utils import timezone
 
 from leadhook.leads.models import Lead
+from leadhook.leads.services import FETCH_BACKOFF
+from leadhook.leads.tasks import fetch_lead, process_event
 
 from .models import Delivery
 from .services import (
@@ -13,6 +16,9 @@ from .services import (
     refresh_lead_status,
     schedule_retry,
 )
+from .sweep import stuck_deliveries, stuck_events, stuck_fetched_leads, stuck_received_leads
+
+SWEEP_BATCH = 500
 
 
 @shared_task
@@ -53,3 +59,18 @@ def deliver(self, delivery_id: int) -> None:
             schedule_retry(delivery, delay)
             raise self.retry(countdown=delay)
     refresh_lead_status(delivery.lead)
+
+
+@shared_task
+def sweep_stuck_work() -> None:
+    """Re-dispatch lost work; every task it dispatches is safe to run twice."""
+    now = timezone.now()
+    for pk in stuck_events(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        process_event.delay(pk)
+    for pk in stuck_received_leads(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        # One attempt, no retry chain: the next sweep (an hour later) tries again.
+        fetch_lead.delay(pk, attempt=len(FETCH_BACKOFF))
+    for pk in stuck_fetched_leads(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        route_lead.delay(pk)
+    for pk in stuck_deliveries(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        deliver.delay(pk)
