@@ -10,6 +10,7 @@ from leadhook.meta.services import record_page_error
 
 from .models import Lead, WebhookEvent
 from .parsing import extract_leadgen_changes
+from .retention import purge_expired_data
 from .services import (
     FETCH_BACKOFF,
     FetchOutcome,
@@ -89,3 +90,8 @@ def reconcile_leads() -> None:
             continue
         for lead in leads:
             route_lead.delay(lead.pk)
+
+
+@shared_task
+def purge_old_data() -> None:
+    logger.info("Retention purge: %s", purge_expired_data(now=timezone.now()))

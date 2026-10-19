@@ -190,8 +190,11 @@ def reset_for_resend(delivery: Delivery) -> bool:
     """Put a finished (SUCCESS or FAILED) delivery back to PENDING with a fresh retry budget.
 
     Returns False and changes nothing for a PENDING delivery: it is being sent right now or
-    is scheduled for a retry, and resetting it would break its lease.
+    is scheduled for a retry, and resetting it would break its lease. Also False when the
+    lead's data was purged: resending would send an empty payload.
     """
+    if delivery.lead.purged_at is not None:
+        return False
     now = timezone.now()
     reset = (
         Delivery.objects.filter(pk=delivery.pk)

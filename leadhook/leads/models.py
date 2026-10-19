@@ -59,6 +59,8 @@ class Lead(models.Model):
         max_length=20, choices=Status.choices, default=Status.RECEIVED, db_index=True
     )
     error = models.TextField(blank=True)
+    # Set by the retention purge; field_data/data are empty from then on.
+    purged_at = models.DateTimeField(null=True, blank=True)
     received_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
