@@ -41,21 +41,37 @@ def extract_leadgen_changes(payload: dict) -> list[LeadgenChange]:
     return changes
 
 
-def simplify_field_data(field_data: list[dict] | None) -> dict:
-    """Map Meta field_data to {name: value}: one value -> string, several -> list, none -> ""."""
+def simplify_field_data(field_data) -> dict:
+    """Map Meta field_data to {name: value}: one value -> string, several -> list, none -> "".
+
+    Items that are not objects or have no name are skipped.
+    """
     result: dict = {}
-    for field in field_data or []:
-        values = field.get("values") or []
+    if not isinstance(field_data, list):
+        return result
+    for field in field_data:
+        if not isinstance(field, dict) or not field.get("name"):
+            continue
+        values = field.get("values")
+        if isinstance(values, str):
+            values = [values]
+        elif not isinstance(values, list):
+            values = []
+        name = str(field["name"])
         if len(values) == 0:
-            result[field["name"]] = ""
+            result[name] = ""
         elif len(values) == 1:
-            result[field["name"]] = values[0]
+            result[name] = values[0]
         else:
-            result[field["name"]] = list(values)
+            result[name] = list(values)
     return result
 
 
-def parse_meta_time(value: str | None) -> datetime | None:
-    if not value:
+def parse_meta_time(value) -> datetime | None:
+    """Meta's timestamp as an aware datetime, or None when missing or malformed."""
+    if not isinstance(value, str) or not value:
         return None
-    return datetime.strptime(value, META_TIME_FORMAT)
+    try:
+        return datetime.strptime(value, META_TIME_FORMAT)
+    except ValueError:
+        return None

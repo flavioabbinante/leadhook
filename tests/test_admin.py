@@ -8,7 +8,7 @@ from django.utils import timezone
 from leadhook.destinations.models import Delivery, Destination
 from leadhook.leads.models import Lead, WebhookEvent
 from leadhook.meta.models import MetaApp
-from tests.factories import make_destination, make_lead, make_meta_app
+from tests.factories import make_destination, make_lead, make_meta_app, make_page
 
 
 def test_admin_pages_render(admin_client):
@@ -217,3 +217,46 @@ def test_destination_extra_headers_help_warns_about_clear_text(admin_client):
     content = admin_client.get(reverse("admin:destinations_destination_add")).content.decode()
     assert "Stored in clear text" in content
     assert "put credentials in Secret, not here" in content
+
+
+def test_page_and_destination_change_pages_never_show_secrets(admin_client):
+    page = make_page(page_token="page-token-secret-1234")
+    destination = make_destination(
+        auth_type=Destination.AuthType.BEARER, secret="destination-secret-5678"
+    )
+    for url, secret, tail in [
+        (reverse("admin:meta_page_change", args=[page.pk]), "page-token-secret-1234", "1234"),
+        (
+            reverse("admin:destinations_destination_change", args=[destination.pk]),
+            "destination-secret-5678",
+            "5678",
+        ),
+    ]:
+        html = admin_client.get(url).content.decode()
+        assert secret not in html
+        assert f"Stored: ••••{tail}" in html
+
+
+def test_saving_destination_without_secret_keeps_it(admin_client):
+    destination = make_destination(auth_type=Destination.AuthType.BEARER, secret="keep-me")
+    response = admin_client.post(
+        reverse("admin:destinations_destination_change", args=[destination.pk]),
+        {
+            "name": "Renamed",
+            "kind": "webhook",
+            "url": destination.url,
+            "method": "POST",
+            "auth_type": "bearer",
+            "auth_header_name": "",
+            "secret": "",
+            "extra_headers": "{}",
+            "payload_template": "",
+            "success_condition": "",
+            "timeout_s": "15",
+            "active": "on",
+        },
+    )
+    assert response.status_code == 302
+    destination.refresh_from_db()
+    assert destination.name == "Renamed"
+    assert destination.secret == "keep-me"
