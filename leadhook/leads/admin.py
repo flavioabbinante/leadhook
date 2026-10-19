@@ -23,6 +23,8 @@ class LeadAdmin(admin.ModelAdmin):
     def reprocess(self, request, queryset):
         count = 0
         for lead in queryset:
+            if lead.purged_at is not None:
+                continue
             if lead.status == Lead.Status.RECEIVED:
                 fetch_lead.delay(lead.pk)
             elif lead.status in (Lead.Status.FETCHED, Lead.Status.UNROUTED, Lead.Status.ROUTED):

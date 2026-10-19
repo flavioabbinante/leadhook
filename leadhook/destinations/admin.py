@@ -2,7 +2,7 @@ import json
 
 from django.contrib import admin
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 
 from leadhook.core.admin_forms import SecretAwareModelForm
 from leadhook.core.models import get_default_workspace
@@ -42,16 +42,19 @@ class DestinationAdmin(admin.ModelAdmin):
             obj.workspace = get_default_workspace()
         super().save_model(request, obj, form, change)
 
-    def get_form(self, request, obj=None, **kwargs):
-        self._preview_lead_id = request.GET.get("preview_lead")
-        return super().get_form(request, obj, **kwargs)
+    def get_object(self, request, object_id, from_field=None):
+        obj = super().get_object(request, object_id, from_field)
+        if obj is not None:
+            # Per request: the admin instance is shared between threads.
+            obj._preview_lead_id = request.GET.get("preview_lead")
+        return obj
 
     @admin.display(description="Payload preview")
     def payload_preview(self, obj: Destination):
         if not obj.pk:
             return "Save the destination to see a preview."
-        leads = Lead.objects.exclude(status=Lead.Status.RECEIVED)
-        lead_id = getattr(self, "_preview_lead_id", None)
+        leads = Lead.objects.exclude(status=Lead.Status.RECEIVED).filter(purged_at__isnull=True)
+        lead_id = getattr(obj, "_preview_lead_id", None)
         lead = leads.filter(leadgen_id=lead_id).first() if lead_id else leads.first()
         if lead is None:
             return "No fetched leads yet."
@@ -62,11 +65,13 @@ class DestinationAdmin(admin.ModelAdmin):
             body = json.dumps(json.loads(render_body(obj, context)), indent=2, ensure_ascii=False)
         except TemplateError as exc:
             return str(exc)
+        others = format_html_join(
+            " · ",
+            '<a href="?preview_lead={}">{}</a>',
+            ((other.leadgen_id, other.leadgen_id) for other in leads[:10]),
+        )
         return format_html(
-            "<p>Using lead {} (add <code>?preview_lead=&lt;lead id&gt;</code> "
-            "to the URL to pick another).</p><pre>{}</pre>",
-            lead.leadgen_id,
-            body,
+            "<p>Using lead {}. Preview another: {}</p><pre>{}</pre>", lead.leadgen_id, others, body
         )
 
 
@@ -102,7 +107,7 @@ class DeliveryAdmin(admin.ModelAdmin):
                 skipped += 1
         message = f"{count} deliveries queued for resending."
         if skipped:
-            message += f" {skipped} skipped (already in progress or scheduled)."
+            message += f" {skipped} skipped (in progress, scheduled, or lead data purged)."
         self.message_user(request, message)
 
 

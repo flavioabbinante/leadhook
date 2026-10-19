@@ -56,6 +56,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "leadhook.core.middleware.EncryptionKeyErrorMiddleware",
 ]
 
 ROOT_URLCONF = "leadhook.urls"
@@ -100,6 +101,8 @@ STORAGES = {
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_HTTPONLY = True
+# Lets a container or load-balancer probe call /health/ over plain HTTP.
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 if not DEBUG:
     SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
     SECURE_HSTS_SECONDS = (
@@ -115,8 +118,41 @@ CELERY_TASK_IGNORE_RESULT = True
 # A retry is scheduled at most 24 h ahead; Redis must not redeliver it before that.
 CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 26 * 3600}
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": CELERY_BROKER_URL,
+        "KEY_PREFIX": "leadhook",
+    }
+}
+
+# EMAIL_URL examples: smtp+tls://user:password@smtp.example.com:587, consolemail://
+EMAIL_CONFIG = env.email_url("EMAIL_URL", default="consolemail://")
+vars().update(EMAIL_CONFIG)
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="leadhook@localhost")
+ALERT_EMAILS = env.list("ALERT_EMAILS", default=[])
+ALERT_THROTTLE_SECONDS = 15 * 60
+
+LEAD_RETENTION_DAYS = env.int("LEAD_RETENTION_DAYS", default=90)
+SILENCE_ALERT_HOURS = env.int("SILENCE_ALERT_HOURS", default=24)
+
+# Periodic tasks; every task adds its own entry (intervals in seconds).
+CELERY_BEAT_SCHEDULE = {
+    "heartbeat": {"task": "leadhook.core.tasks.heartbeat", "schedule": 60.0},
+    "reconcile-leads": {"task": "leadhook.leads.tasks.reconcile_leads", "schedule": 900.0},
+    "sync-forms": {"task": "leadhook.meta.tasks.sync_forms", "schedule": 3600.0},
+    "check-pages": {"task": "leadhook.meta.tasks.check_pages", "schedule": 86400.0},
+    "check-silence": {"task": "leadhook.meta.tasks.check_silence", "schedule": 3600.0},
+    "purge-old-data": {"task": "leadhook.leads.tasks.purge_old_data", "schedule": 86400.0},
+    "sweep-stuck-work": {"task": "leadhook.destinations.tasks.sweep_stuck_work", "schedule": 300.0},
+}
+
 META_GRAPH_VERSION = env("META_GRAPH_VERSION", default="v26.0")
 ALLOW_PRIVATE_DESTINATIONS = env.bool("ALLOW_PRIVATE_DESTINATIONS", default=False)
+# Custom CA bundle for destinations behind a private CA (requests ignores the env var
+# because the outbound session disables trust_env).
+DESTINATION_CA_BUNDLE = env("REQUESTS_CA_BUNDLE", default="")
 
 LOGGING = {
     "version": 1,

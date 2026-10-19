@@ -3,6 +3,7 @@ from datetime import timedelta
 import pytest
 import responses
 from celery.exceptions import Retry
+from django.core.cache import cache
 from django.utils import timezone
 
 from leadhook.destinations.models import Delivery
@@ -185,3 +186,80 @@ def test_resend_restarts_retry_budget():
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.FAILED
     assert delivery.attempts == 2 * (len(DELIVERY_BACKOFF) + 1)
+
+
+@responses.activate
+def test_failed_delivery_alert_has_ids_only(mailoutbox):
+    responses.post(HOOK, status=400)
+    delivery = _pending_delivery()
+    deliver(delivery.pk)
+    assert len(mailoutbox) == 1
+    body = mailoutbox[0].body
+    assert "333" in body
+    assert "HTTP 400" in body
+    assert "Jane Doe" not in body
+
+
+def test_unrouted_lead_alerts_once(mailoutbox):
+    lead = make_lead()
+    route_lead(lead.pk)
+    cache.clear()  # rule out the throttle: the second run must stay quiet on its own
+    route_lead(lead.pk)
+    assert len(mailoutbox) == 1
+    assert "333" in mailoutbox[0].body
+
+
+def _steal_lease(delivery):
+    """A responses callback simulating another worker taking over mid-request."""
+
+    def callback(request):
+        Delivery.objects.filter(pk=delivery.pk).update(
+            locked_until=timezone.now() + timedelta(hours=1)
+        )
+        return (500, {}, "")
+
+    return callback
+
+
+@responses.activate
+def test_late_result_after_lease_loss_is_discarded():
+    delivery = _pending_delivery()
+    responses.add_callback(responses.POST, HOOK, callback=_steal_lease(delivery))
+    deliver(delivery.pk)  # no Retry: the result was dropped
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.PENDING
+    assert delivery.last_status_code is None
+    assert delivery.next_retry_at is None
+
+
+@responses.activate
+def test_exhaustion_does_not_overwrite_a_stolen_lease():
+    delivery = _pending_delivery()
+    Delivery.objects.filter(pk=delivery.pk).update(attempts=len(DELIVERY_BACKOFF))
+    responses.add_callback(responses.POST, HOOK, callback=_steal_lease(delivery))
+    deliver(delivery.pk)
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.PENDING
+
+
+@responses.activate
+def test_deliver_honors_retry_after():
+    responses.post(HOOK, status=429, headers={"Retry-After": "600"})
+    delivery = _pending_delivery()
+    before = timezone.now()
+    with pytest.raises(Retry):
+        deliver(delivery.pk)
+    delivery.refresh_from_db()
+    assert delivery.next_retry_at >= before + timedelta(seconds=600)
+
+
+def test_failing_template_filter_fails_delivery_without_retry():
+    lead = make_lead(status=Lead.Status.ROUTED)
+    destination = make_destination(
+        payload_template='{"d": {{ created_time | date("Nowhere/Zone") | tojson }}}'
+    )
+    delivery = Delivery.objects.create(lead=lead, destination=destination)
+    deliver(delivery.pk)
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.FAILED
+    assert delivery.last_error.startswith("Template error")

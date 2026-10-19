@@ -13,6 +13,10 @@ Why: n8n's Facebook Lead Ads trigger can only hold one subscription per Meta app
 - Automatic retries with backoff for about a day and a half (7 attempts); one-click resend from the admin.
 - Duplicate-proof: each lead is delivered once per destination, with an `Idempotency-Key` header.
 - Secrets encrypted at rest.
+- No lost leads: reconciliation every 15 minutes recovers leads whose webhook never arrived, and a sweeper re-dispatches work lost by a restart.
+- Email alerts, an admin dashboard and a `/health/` endpoint for uptime monitors.
+- Guided setup in the admin, including a "Send test lead" button.
+- Personal data erased after `LEAD_RETENTION_DAYS` (90 by default).
 
 ## Quick start
 
@@ -26,19 +30,26 @@ docker compose up -d
 docker compose exec web python manage.py createsuperuser
 ```
 
-Open `https://<your-domain>/admin/`.
+Open `https://<your-domain>/admin/`, then **Set up LeadHook** (`/admin/setup/`, also linked from the dashboard) and follow the steps.
 
 ## Meta app setup
 
-1. In [Meta for Developers](https://developers.facebook.com/apps/) create an app of type **Business** and add the **Webhooks** product.
-2. In LeadHook, add a **Meta app** with the App ID and App secret. Copy the **Callback URL** and **Verify token** it shows.
-3. In Meta, Webhooks → **Page** → subscribe with that callback URL and verify token, then subscribe to the `leadgen` field.
-4. In Business Settings create a **System User**, assign it your pages, and generate a token with `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement` and `pages_manage_ads`. Paste it into the Meta app in LeadHook. LeadHook uses this System User token for every page that has no page access token of its own.
-5. In Business Settings → Integrations → **Leads Access**, grant access to your app.
-6. Complete Business Verification and switch the app to **Live** — apps in development mode only receive test webhooks.
-7. For each page, add a **Page** in LeadHook (the page access token is optional when the System User token covers the page), and subscribe the page to your app:
-   `POST https://graph.facebook.com/<version>/<page-id>/subscribed_apps?subscribed_fields=leadgen&access_token=<page-token>`
-8. Create a **Destination** and set it as the page's default destination (or on specific forms).
+LeadHook uses your own Meta app. One-time preparation in Meta:
+
+1. **Business Verification.** In Business Settings → Security Center, verify your business. Without it the app cannot go Live, and apps in development mode only receive test leads.
+2. **App.** In [Meta for Developers](https://developers.facebook.com/apps/) create an app of type **Business**, add the **Webhooks** product, and note the App ID and App secret (App settings → Basic).
+3. **Permissions.** The app needs `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement` and `pages_manage_ads`. For your own pages Standard Access is enough; no App Review is needed while the System User belongs to the same business.
+4. **System User.** In Business Settings → Users → System users, create an admin System User, assign it your pages (full control) and the app, then generate a token for the app with the permissions above. System User tokens never expire.
+5. **Leads Access.** In Business Settings → Integrations → Leads Access, allow the app (or the System User) for each page; otherwise Meta returns leads without answers.
+6. **Live mode.** Switch the app to Live.
+
+Then in LeadHook, open **Set up LeadHook** (`/admin/setup/`):
+
+1. Add the Meta app with the App ID, App secret and System User token.
+2. Copy the **Callback URL** and **Verify token** into the Meta app: Webhooks → **Page** → Subscribe to this object, then subscribe to the `leadgen` field. Press **Verify**.
+3. **Load pages**, select yours and **Connect**: LeadHook subscribes each page to lead events and imports its forms.
+4. Create a destination and set it as a page default (or on single forms).
+5. **Send test lead** and watch it arrive under Leads and Deliveries.
 
 ## Payload
 
@@ -84,6 +95,14 @@ Always end each value with `| tojson`. The admin shows a live preview of the ren
 
 Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h (`Retry-After` is honored) — 7 attempts over about a day and a half. Other 4xx responses fail immediately. Finished deliveries (successful or failed) can be resent from **Deliveries** in the admin, which starts a fresh cycle of 7 attempts; deliveries still pending are skipped.
 
+## Monitoring
+
+- **Dashboard** (admin home): leads today and per form, failed deliveries, unrouted leads, page health, background job status.
+- **Email alerts** to `ALERT_EMAILS`: permanently failed delivery, unrouted lead, page token or subscription problem, lead that could not be fetched, unusual silence. At most one email per kind every 15 minutes.
+- **`GET /health/`** returns 200 with `{"database": "ok", "redis": "ok", "beat": "ok"}`, or 503 naming what is wrong. `beat` turns `stale` when the background jobs have not run for 5 minutes. The endpoint is exempt from the HTTPS redirect; the `Host` header must still be in `ALLOWED_HOSTS`.
+- **Background jobs** (Celery beat): reconciliation (15 min), sweeper (5 min), form sync (1 h), silence check (1 h), page and token check (daily), retention purge (daily).
+- **Retention:** after `LEAD_RETENTION_DAYS` the lead answers, webhook payloads and request/response bodies are erased; IDs, ad/campaign names and statuses are kept. Purged leads cannot be resent.
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -93,7 +112,7 @@ Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 mi
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | Public URL, used to build the webhook callback URL. |
 | `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated host names. |
 | `DATABASE_URL` | SQLite | PostgreSQL recommended. |
-| `REDIS_URL` | `redis://localhost:6379/0` | Celery broker. |
+| `REDIS_URL` | `redis://localhost:6379/0` | Celery broker and cache (alert throttling, heartbeat). |
 | `META_GRAPH_VERSION` | see `.env.example` | Graph API version for new Meta apps. |
 | `ALLOW_PRIVATE_DESTINATIONS` | `false` | Allow destinations on private networks (e.g. n8n in the same Docker network). |
 | `CSRF_TRUSTED_ORIGINS` | `PUBLIC_BASE_URL` | Comma-separated origins allowed to submit admin forms, e.g. `https://leads.example.com`. |
@@ -102,6 +121,12 @@ Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 mi
 | `DJANGO_DEBUG` | `false` | Debug mode. Never enable in production. |
 | `LOG_LEVEL` | `INFO` | Log level for the web, worker and beat processes. |
 | `WEB_CONCURRENCY` | `3` | Number of gunicorn workers in the web container. |
+| `EMAIL_URL` | `consolemail://` | SMTP server for alerts, e.g. `smtp+tls://user:password@smtp.example.com:587`. |
+| `DEFAULT_FROM_EMAIL` | `leadhook@localhost` | Sender of alert emails. |
+| `ALERT_EMAILS` | — | Comma-separated recipients; no alerts when empty. |
+| `LEAD_RETENTION_DAYS` | `90` | Lead answers, webhook payloads and request/response bodies older than this are erased. |
+| `SILENCE_ALERT_HOURS` | `24` | Alert when a page that had leads in the last 30 days has none for this long. |
+| `REQUESTS_CA_BUNDLE` | — | CA bundle for destinations behind a private certificate authority. |
 
 ## Development
 

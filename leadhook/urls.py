@@ -2,14 +2,19 @@ from django.contrib import admin
 from django.urls import path
 from django.views.generic import RedirectView
 
+from leadhook.core.views import health
+from leadhook.meta.setup import setup_view
 from leadhook.meta.views import meta_webhook
 
 admin.site.site_header = "LeadHook"
 admin.site.site_title = "LeadHook"
 admin.site.index_title = "Administration"
+admin.site.index_template = "admin/leadhook_index.html"
 
 urlpatterns = [
     path("", RedirectView.as_view(url="/admin/", permanent=False)),
+    path("admin/setup/", admin.site.admin_view(setup_view), name="setup"),
     path("admin/", admin.site.urls),
+    path("health/", health, name="health"),
     path("webhooks/meta/<uuid:webhook_uuid>/", meta_webhook, name="meta-webhook"),
 ]

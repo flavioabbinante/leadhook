@@ -25,3 +25,5 @@ STORAGES = {
 }
 WHITENOISE_AUTOREFRESH = True
 WHITENOISE_USE_FINDERS = True
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+ALERT_EMAILS = ["ops@example.com"]

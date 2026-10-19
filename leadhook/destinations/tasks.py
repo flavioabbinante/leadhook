@@ -1,6 +1,9 @@
 from celery import shared_task
+from django.utils import timezone
 
 from leadhook.leads.models import Lead
+from leadhook.leads.services import FETCH_BACKOFF
+from leadhook.leads.tasks import fetch_lead, process_event
 
 from .models import Delivery
 from .services import (
@@ -13,11 +16,16 @@ from .services import (
     refresh_lead_status,
     schedule_retry,
 )
+from .sweep import stuck_deliveries, stuck_events, stuck_fetched_leads, stuck_received_leads
+
+SWEEP_BATCH = 500
 
 
 @shared_task
 def route_lead(lead_id: int) -> None:
     lead = Lead.objects.select_related("page", "form").get(pk=lead_id)
+    if lead.purged_at is not None:
+        return
     if lead.status not in (Lead.Status.FETCHED, Lead.Status.UNROUTED, Lead.Status.ROUTED):
         return
     # ROUTED is accepted so a lost deliver dispatch is recovered on redelivery;
@@ -38,18 +46,41 @@ def deliver(self, delivery_id: int) -> None:
     )
     if delivery.status != Delivery.Status.PENDING:
         return
+    if delivery.lead.purged_at is not None:
+        mark_delivery_failed(
+            delivery, "Lead data was purged by the retention policy before delivery"
+        )
+        refresh_lead_status(delivery.lead)
+        return
     result = attempt_delivery(delivery)
     if result.outcome == "skip":
         return
     if result.outcome == "retry":
+        lease = delivery.locked_until  # attempt_delivery keeps the lease on retry
         # 0 after the first attempt of a cycle; a cycle allows len(DELIVERY_BACKOFF) + 1 attempts.
         retry_index = delivery.attempts - delivery.retry_base - 1
         if retry_index >= len(DELIVERY_BACKOFF):
             mark_delivery_failed(
-                delivery, f"Gave up after {delivery.attempts} attempts: {result.error}"
+                delivery, f"Gave up after {delivery.attempts} attempts: {result.error}", lease=lease
             )
         else:
             delay = next_retry_delay(retry_index, result.retry_after)
-            schedule_retry(delivery, delay)
+            if not schedule_retry(delivery, delay, lease=lease):
+                return
             raise self.retry(countdown=delay)
     refresh_lead_status(delivery.lead)
+
+
+@shared_task
+def sweep_stuck_work() -> None:
+    """Re-dispatch lost work; every task it dispatches is safe to run twice."""
+    now = timezone.now()
+    for pk in stuck_events(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        process_event.delay(pk)
+    for pk in stuck_received_leads(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        # One attempt, no retry chain: the next sweep (an hour later) tries again.
+        fetch_lead.delay(pk, attempt=len(FETCH_BACKOFF))
+    for pk in stuck_fetched_leads(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        route_lead.delay(pk)
+    for pk in stuck_deliveries(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
+        deliver.delay(pk)
