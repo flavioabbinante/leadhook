@@ -72,6 +72,7 @@ class Form(models.Model):
     locale = models.CharField(max_length=16, blank=True)
     status = models.CharField(max_length=32, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_reconciled_at = models.DateTimeField(null=True, blank=True)
     destinations = models.ManyToManyField(
         "destinations.Destination",
         blank=True,

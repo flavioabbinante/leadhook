@@ -1,5 +1,6 @@
 """Lead ingestion and fetching. Celery-free so it can be tested and reused directly."""
 
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from django.db import models
@@ -14,6 +15,8 @@ from .parsing import parse_meta_time, simplify_field_data
 
 # Seconds to wait before each retry of a transient Graph API failure.
 FETCH_BACKOFF = [30, 120, 600, 1800, 3600, 3600]
+RECONCILE_OVERLAP = timedelta(hours=1)
+RECONCILE_FIRST_WINDOW = timedelta(days=1)
 
 
 class FetchOutcome(StrEnum):
@@ -95,6 +98,13 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
             return FetchOutcome.GIVE_UP
         return FetchOutcome.RETRY if exc.is_transient else FetchOutcome.GIVE_UP
 
+    store_lead_details(lead, page, raw, client)
+    return FetchOutcome.DONE
+
+
+def store_lead_details(lead: Lead, page: Page, raw: dict, client: GraphClient) -> None:
+    """Save a Graph API lead object on `lead` and mark it fetched."""
+    lead.page = page
     lead.created_time = parse_meta_time(raw.get("created_time"))
     for name in ("ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"):
         setattr(lead, name, _fit(Lead, name, raw.get(name)))
@@ -107,4 +117,29 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
     lead.error = ""
     lead.save()
     Page.objects.filter(pk=page.pk).update(last_lead_at=timezone.now(), error="")
-    return FetchOutcome.DONE
+
+
+def reconcile_form(form: Form, client: GraphClient, *, now: datetime) -> list[Lead]:
+    """Store leads Meta has for the form that LeadHook never fetched; return them for routing."""
+    since = (form.last_reconciled_at or now - RECONCILE_FIRST_WINDOW) - RECONCILE_OVERLAP
+    found: list[Lead] = []
+    for raw in client.list_form_leads(form.form_id, since=since):
+        leadgen_id = str(raw.get("id") or "")
+        if not leadgen_id:
+            continue
+        lead = ingest_lead(
+            leadgen_id=leadgen_id,
+            page_external_id=form.page.page_id,
+            form_external_id=form.form_id,
+            source=Lead.Source.RECONCILE,
+        )
+        if lead is None:
+            # Known lead: finish it only if its own fetch never succeeded.
+            lead = Lead.objects.filter(leadgen_id=leadgen_id, status=Lead.Status.RECEIVED).first()
+        if lead is None:
+            continue
+        store_lead_details(lead, form.page, raw, client)
+        found.append(lead)
+    form.last_reconciled_at = now
+    form.save(update_fields=["last_reconciled_at"])
+    return found
