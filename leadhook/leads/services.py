@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from leadhook.meta.graph import GraphClient, GraphError, client_for_page
 from leadhook.meta.models import Form, Page
+from leadhook.meta.services import record_page_error
 
 from .models import Lead
 from .parsing import parse_meta_time, simplify_field_data
@@ -90,8 +91,7 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
         lead.error = str(exc)
         lead.save(update_fields=["page", "error", "updated_at"])
         if exc.is_token_error:
-            page.error = f"Meta rejected the page token: {exc}"
-            page.save(update_fields=["error"])
+            record_page_error(page, f"Meta rejected the page token: {exc}")
             return FetchOutcome.GIVE_UP
         return FetchOutcome.RETRY if exc.is_transient else FetchOutcome.GIVE_UP
 

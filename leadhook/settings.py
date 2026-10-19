@@ -115,6 +115,25 @@ CELERY_TASK_IGNORE_RESULT = True
 # A retry is scheduled at most 24 h ahead; Redis must not redeliver it before that.
 CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 26 * 3600}
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": CELERY_BROKER_URL,
+        "KEY_PREFIX": "leadhook",
+    }
+}
+
+# EMAIL_URL examples: smtp+tls://user:password@smtp.example.com:587, consolemail://
+EMAIL_CONFIG = env.email_url("EMAIL_URL", default="consolemail://")
+vars().update(EMAIL_CONFIG)
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="leadhook@localhost")
+ALERT_EMAILS = env.list("ALERT_EMAILS", default=[])
+ALERT_THROTTLE_SECONDS = 15 * 60
+
+LEAD_RETENTION_DAYS = env.int("LEAD_RETENTION_DAYS", default=90)
+SILENCE_ALERT_HOURS = env.int("SILENCE_ALERT_HOURS", default=24)
+
 META_GRAPH_VERSION = env("META_GRAPH_VERSION", default="v26.0")
 ALLOW_PRIVATE_DESTINATIONS = env.bool("ALLOW_PRIVATE_DESTINATIONS", default=False)
 
