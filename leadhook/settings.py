@@ -140,6 +140,9 @@ SILENCE_ALERT_HOURS = env.int("SILENCE_ALERT_HOURS", default=24)
 CELERY_BEAT_SCHEDULE = {
     "heartbeat": {"task": "leadhook.core.tasks.heartbeat", "schedule": 60.0},
     "reconcile-leads": {"task": "leadhook.leads.tasks.reconcile_leads", "schedule": 900.0},
+    "sync-forms": {"task": "leadhook.meta.tasks.sync_forms", "schedule": 3600.0},
+    "check-pages": {"task": "leadhook.meta.tasks.check_pages", "schedule": 86400.0},
+    "check-silence": {"task": "leadhook.meta.tasks.check_silence", "schedule": 3600.0},
 }
 
 META_GRAPH_VERSION = env("META_GRAPH_VERSION", default="v26.0")
