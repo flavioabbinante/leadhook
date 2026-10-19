@@ -113,3 +113,16 @@ def silent_pages(now: datetime) -> QuerySet[Page]:
         .filter(Q(silence_alerted_at__isnull=True) | Q(silence_alerted_at__lt=F("last_lead_at")))
         .order_by("page_id")
     )
+
+
+def connect_page(meta_app: MetaApp, raw: dict) -> tuple[Page, int]:
+    """Store a page listed by /me/accounts, subscribe it to leadgen and sync its forms."""
+    defaults = {"meta_app": meta_app, "name": fit_to_field(Page, "name", raw.get("name"))}
+    if raw.get("access_token"):
+        defaults["page_token"] = raw["access_token"]
+    page, _ = Page.objects.update_or_create(page_id=str(raw["id"]), defaults=defaults)
+    client = client_for_page(page)
+    client.subscribe_leadgen(page.page_id)
+    Page.objects.filter(pk=page.pk).update(subscribed=True, error="")
+    page.subscribed, page.error = True, ""
+    return page, sync_page_forms(page, client)

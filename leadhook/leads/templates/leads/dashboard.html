@@ -1,3 +1,4 @@
+{% if not setup_complete %}<p class="errornote">Setup is not complete. <a href="{% url 'setup' %}">Continue the guided setup</a>.</p>{% endif %}
 <div class="module" id="leadhook-dashboard">
   <table>
     <caption>Overview</caption>

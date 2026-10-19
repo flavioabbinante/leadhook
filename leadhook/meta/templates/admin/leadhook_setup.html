@@ -1,0 +1,69 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> › Set up</div>{% endblock %}
+{% block content %}
+<div id="content-main">
+<ol>
+  <li>
+    <h2>✔ Admin user</h2>
+    <p>You are signed in as {{ request.user.get_username }}.</p>
+  </li>
+  <li>
+    <h2>{% if has_app %}✔{% else %}○{% endif %} Meta app</h2>
+    <p>Enter the App ID, App secret and a System User access token. The README's
+      “Meta app setup” section explains how to create them.</p>
+    {% if meta_app %}
+      <p><a class="button" href="{% url 'admin:meta_metaapp_change' meta_app.pk %}">Edit {{ meta_app.name }}</a></p>
+    {% else %}
+      <p><a class="button" href="{% url 'admin:meta_metaapp_add' %}">Add the Meta app</a></p>
+    {% endif %}
+  </li>
+  {% if meta_app %}
+  <li>
+    <h2>Webhook</h2>
+    <p>In the Meta app dashboard open <strong>Webhooks</strong>, choose <strong>Page</strong>,
+      subscribe with these values, then subscribe to the <code>leadgen</code> field.</p>
+    <p>Callback URL: <code>{{ meta_app.webhook_url }}</code><br>
+      Verify token: <code>{{ meta_app.verify_token }}</code></p>
+    <form method="post">{% csrf_token %}<button type="submit" name="action" value="verify">Verify</button></form>
+  </li>
+  <li>
+    <h2>{% if has_pages %}✔{% else %}○{% endif %} Pages</h2>
+    {% if available_pages is not None %}
+      <form method="post">{% csrf_token %}
+        {% for page in available_pages %}
+          <p><label><input type="checkbox" name="page_ids" value="{{ page.id }}"{% if page.connected %} checked{% endif %}>
+            {{ page.name }} ({{ page.id }})</label></p>
+        {% empty %}
+          <p>No pages are reachable with this token. Assign pages to the System User in Business Settings.</p>
+        {% endfor %}
+        <button type="submit" name="action" value="connect_pages">Connect selected pages</button>
+      </form>
+    {% else %}
+      <p>Connecting a page subscribes it to lead events and loads its forms.</p>
+      <form method="post">{% csrf_token %}<button type="submit" name="action" value="load_pages">Load pages</button></form>
+    {% endif %}
+  </li>
+  <li>
+    <h2>{% if has_destination %}✔{% else %}○{% endif %} Destination</h2>
+    <p>Create a destination (for example your n8n webhook), then pick it as a page default or on a form.</p>
+    <p><a class="button" href="{% url 'admin:destinations_destination_add' %}">Add a destination</a>
+      <a class="button" href="{% url 'admin:meta_page_changelist' %}">Set page defaults</a></p>
+  </li>
+  <li>
+    <h2>{% if has_lead %}✔{% else %}○{% endif %} Test lead</h2>
+    {% if forms %}
+      <form method="post">{% csrf_token %}
+        <label for="form_id">Form</label>
+        <select name="form_id" id="form_id">
+          {% for form in forms %}<option value="{{ form.form_id }}">{{ form.page.name }} — {{ form }}</option>{% endfor %}
+        </select>
+        <button type="submit" name="action" value="test_lead">Send test lead</button>
+      </form>
+    {% else %}
+      <p>Connect a page first.</p>
+    {% endif %}
+  </li>
+  {% endif %}
+</ol>
+</div>
+{% endblock %}
