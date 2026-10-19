@@ -1,8 +1,12 @@
 """Minimal Meta Graph API client."""
 
+import json
+from datetime import datetime
+from urllib.parse import quote
+
 import requests
 
-from .models import Page
+from .models import MetaApp, Page
 
 GRAPH_BASE_URL = "https://graph.facebook.com"
 LEAD_FIELDS = (
@@ -41,17 +45,33 @@ class GraphError(Exception):
         )
 
 
+def node(id_: str) -> str:
+    """A Graph node ID as a single safe path segment (no traversal to other endpoints)."""
+    return quote(str(id_), safe="")
+
+
 class GraphClient:
-    def __init__(self, version: str, access_token: str, timeout: float = 15) -> None:
+    def __init__(
+        self,
+        version: str,
+        access_token: str,
+        timeout: float = 15,
+        redact: tuple[str, ...] = (),
+    ) -> None:
         self.version = version
         self.access_token = access_token
         self.timeout = timeout
+        secrets = {s for s in (access_token, *redact) if s}
+        # requests URL-encodes query values, so error messages may carry the encoded form.
+        self._secrets = sorted(
+            secrets | {quote(s, safe="") for s in secrets}, key=len, reverse=True
+        )
 
-    def get(self, path: str, params: dict | None = None) -> dict:
+    def request(self, method: str, path: str, params: dict | None = None) -> dict:
         url = f"{GRAPH_BASE_URL}/{self.version}/{path.lstrip('/')}"
         query = {**(params or {}), "access_token": self.access_token}
         try:
-            response = requests.get(url, params=query, timeout=self.timeout)
+            response = requests.request(method, url, params=query, timeout=self.timeout)
         except requests.RequestException as exc:
             message = self._redact(f"{type(exc).__name__}: {exc}")
             raise GraphError(message, status=None, code=None) from None
@@ -70,15 +90,63 @@ class GraphClient:
             )
         return body if isinstance(body, dict) else {}
 
+    def get(self, path: str, params: dict | None = None) -> dict:
+        return self.request("GET", path, params)
+
+    def post(self, path: str, params: dict | None = None) -> dict:
+        return self.request("POST", path, params)
+
+    def get_all(self, path: str, params: dict | None = None, *, max_pages: int = 50) -> list[dict]:
+        """Every item of `data`, following cursor pagination.
+
+        shortcut: stops after max_pages pages (5000 items at limit=100); raise it if a page
+        ever has more forms or a 15-minute reconciliation window holds more leads.
+        """
+        params = dict(params or {})
+        items: list[dict] = []
+        for _ in range(max_pages):
+            body = self.get(path, params)
+            items.extend(item for item in body.get("data") or [] if isinstance(item, dict))
+            paging = body.get("paging") or {}
+            after = (paging.get("cursors") or {}).get("after")
+            if not paging.get("next") or not after:
+                break
+            params["after"] = after
+        return items
+
     def get_lead(self, leadgen_id: str) -> dict:
-        return self.get(leadgen_id, {"fields": LEAD_FIELDS})
+        return self.get(node(leadgen_id), {"fields": LEAD_FIELDS})
 
     def get_form(self, form_id: str) -> dict:
-        return self.get(form_id, {"fields": FORM_FIELDS})
+        return self.get(node(form_id), {"fields": FORM_FIELDS})
+
+    def list_forms(self, page_id: str) -> list[dict]:
+        return self.get_all(f"{node(page_id)}/leadgen_forms", {"fields": FORM_FIELDS, "limit": 100})
+
+    def list_form_leads(self, form_id: str, *, since: datetime) -> list[dict]:
+        filtering = json.dumps(
+            [{"field": "time_created", "operator": "GREATER_THAN", "value": int(since.timestamp())}]
+        )
+        return self.get_all(
+            f"{node(form_id)}/leads", {"fields": LEAD_FIELDS, "filtering": filtering, "limit": 100}
+        )
+
+    def list_pages(self) -> list[dict]:
+        """Pages reachable with this (System User) token, each with its page access token."""
+        return self.get_all("me/accounts", {"fields": "id,name,access_token", "limit": 100})
+
+    def subscribed_app_ids(self, page_id: str) -> set[str]:
+        return {str(app.get("id")) for app in self.get_all(f"{node(page_id)}/subscribed_apps")}
+
+    def subscribe_leadgen(self, page_id: str) -> None:
+        self.post(f"{node(page_id)}/subscribed_apps", {"subscribed_fields": "leadgen"})
+
+    def create_test_lead(self, form_id: str) -> dict:
+        return self.post(f"{node(form_id)}/test_leads")
 
     def _redact(self, text: str) -> str:
-        if self.access_token:
-            text = text.replace(self.access_token, "***")
+        for secret in self._secrets:
+            text = text.replace(secret, "***")
         return text
 
 
@@ -86,3 +154,21 @@ def client_for_page(page: Page) -> GraphClient:
     """Use the page's own token, or the Meta app's System User token when it has none."""
     token = page.page_token or page.meta_app.access_token
     return GraphClient(page.meta_app.graph_version, token)
+
+
+def app_client(meta_app: MetaApp, *, redact: tuple[str, ...] = ()) -> GraphClient:
+    """Client authenticated with the app access token (app_id|app_secret)."""
+    return GraphClient(
+        meta_app.graph_version,
+        f"{meta_app.app_id}|{meta_app.app_secret}",
+        redact=(meta_app.app_secret, *redact),
+    )
+
+
+def debug_token(meta_app: MetaApp, token: str) -> dict:
+    response = app_client(meta_app, redact=(token,)).get("debug_token", {"input_token": token})
+    return response.get("data") or {}
+
+
+def app_subscriptions(meta_app: MetaApp) -> list[dict]:
+    return app_client(meta_app).get_all(f"{node(meta_app.app_id)}/subscriptions")
