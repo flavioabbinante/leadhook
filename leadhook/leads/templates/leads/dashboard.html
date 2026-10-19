@@ -1,0 +1,44 @@
+{% if not setup_complete %}<p class="errornote">Setup is not complete. <a href="{% url 'setup' %}">Continue the guided setup</a>.</p>{% endif %}
+<div class="module" id="leadhook-dashboard">
+  <table>
+    <caption>Overview</caption>
+    <tr><th scope="row">Leads today</th><td>{{ leads_today }}</td></tr>
+    <tr><th scope="row">Leads in the last 7 days</th><td>{{ leads_week }}</td></tr>
+    <tr><th scope="row">Failed deliveries</th>
+      <td><a href="{% url 'admin:destinations_delivery_changelist' %}?status__exact=failed">{{ failed_deliveries }}</a></td></tr>
+    <tr><th scope="row">Unrouted leads</th>
+      <td><a href="{% url 'admin:leads_lead_changelist' %}?status__exact=unrouted">{{ unrouted_leads }}</a></td></tr>
+    <tr><th scope="row">Leads waiting for Meta for over 1 hour</th>
+      <td><a href="{% url 'admin:leads_lead_changelist' %}?status__exact=received">{{ waiting_for_meta }}</a></td></tr>
+    <tr><th scope="row">Background jobs</th>
+      <td>{% if beat_ok %}Running{% else %}<strong>Not running</strong>: check the worker and beat containers.{% endif %}</td></tr>
+  </table>
+</div>
+<div class="module">
+  <table>
+    <caption>Pages</caption>
+    <thead><tr><th scope="col">Page</th><th scope="col">Subscribed</th><th scope="col">Last lead</th><th scope="col">Last check</th><th scope="col">Problem</th></tr></thead>
+    {% for page in pages %}
+      <tr>
+        <td><a href="{% url 'admin:meta_page_change' page.pk %}">{{ page }}</a></td>
+        <td>{{ page.subscribed|yesno:"Yes,No" }}</td>
+        <td>{{ page.last_lead_at|default:"—" }}</td>
+        <td>{{ page.last_checked_at|default:"—" }}</td>
+        <td>{{ page.error|default:"—" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5">No pages connected yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="module">
+  <table>
+    <caption>Leads by form (last 7 days)</caption>
+    <thead><tr><th scope="col">Form</th><th scope="col">Today</th><th scope="col">7 days</th></tr></thead>
+    {% for row in forms %}
+      <tr><td>{{ row.form__name|default:row.form_external_id }}</td><td>{{ row.today }}</td><td>{{ row.week }}</td></tr>
+    {% empty %}
+      <tr><td colspan="3">No leads in the last 7 days.</td></tr>
+    {% endfor %}
+  </table>
+</div>

@@ -1,14 +1,15 @@
 from datetime import timedelta
 from unittest import mock
 
+from django.contrib import admin as django_admin
 from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.utils import timezone
 
 from leadhook.destinations.models import Delivery, Destination
 from leadhook.leads.models import Lead, WebhookEvent
-from leadhook.meta.models import MetaApp
-from tests.factories import make_destination, make_lead, make_meta_app
+from leadhook.meta.models import MetaApp, Page
+from tests.factories import make_destination, make_lead, make_meta_app, make_page
 
 
 def test_admin_pages_render(admin_client):
@@ -189,7 +190,9 @@ def test_resend_action_skips_deliveries_in_progress_or_scheduled(admin_client):
     assert in_flight.locked_until == lease
     messages = [str(m) for m in get_messages(response.wsgi_request)]
     assert any(
-        "2 deliveries queued" in m and "1 skipped" in m and "already in progress or scheduled" in m
+        "2 deliveries queued" in m
+        and "1 skipped" in m
+        and "in progress, scheduled, or lead data purged" in m
         for m in messages
     )
 
@@ -215,3 +218,93 @@ def test_destination_extra_headers_help_warns_about_clear_text(admin_client):
     content = admin_client.get(reverse("admin:destinations_destination_add")).content.decode()
     assert "Stored in clear text" in content
     assert "put credentials in Secret, not here" in content
+
+
+def test_page_and_destination_change_pages_never_show_secrets(admin_client):
+    page = make_page(page_token="page-token-secret-1234")
+    destination = make_destination(
+        auth_type=Destination.AuthType.BEARER, secret="destination-secret-5678"
+    )
+    for url, secret, tail in [
+        (reverse("admin:meta_page_change", args=[page.pk]), "page-token-secret-1234", "1234"),
+        (
+            reverse("admin:destinations_destination_change", args=[destination.pk]),
+            "destination-secret-5678",
+            "5678",
+        ),
+    ]:
+        html = admin_client.get(url).content.decode()
+        assert secret not in html
+        assert f"Stored: ••••{tail}" in html
+
+
+def test_saving_destination_without_secret_keeps_it(admin_client):
+    destination = make_destination(auth_type=Destination.AuthType.BEARER, secret="keep-me")
+    response = admin_client.post(
+        reverse("admin:destinations_destination_change", args=[destination.pk]),
+        {
+            "name": "Renamed",
+            "kind": "webhook",
+            "url": destination.url,
+            "method": "POST",
+            "auth_type": "bearer",
+            "auth_header_name": "",
+            "secret": "",
+            "extra_headers": "{}",
+            "payload_template": "",
+            "success_condition": "",
+            "timeout_s": "15",
+            "active": "on",
+        },
+    )
+    assert response.status_code == 302
+    destination.refresh_from_db()
+    assert destination.name == "Renamed"
+    assert destination.secret == "keep-me"
+
+
+def test_dashboard_shows_counts_and_page_health(admin_client):
+    lead = make_lead(status=Lead.Status.UNROUTED)
+    Page.objects.filter(pk=lead.page.pk).update(error="Meta rejected the page token: x")
+    failed = make_lead(leadgen_id="2", form=lead.form, status=Lead.Status.FAILED)
+    Delivery.objects.create(
+        lead=failed, destination=make_destination(), status=Delivery.Status.FAILED
+    )
+    html = admin_client.get(reverse("admin:index")).content.decode()
+    assert "Leads today" in html
+    assert "Meta rejected the page token: x" in html
+    assert 'status__exact=unrouted">1</a>' in html
+    assert 'status__exact=failed">1</a>' in html
+    assert "Not running" in html  # no heartbeat recorded in tests
+
+
+def test_payload_preview_lead_chooser_is_per_request(admin_client):
+    destination = make_destination()
+    first = make_lead(leadgen_id="1")
+    make_lead(leadgen_id="2", form=first.form)
+    url = reverse("admin:destinations_destination_change", args=[destination.pk])
+    html = admin_client.get(url + "?preview_lead=1").content.decode()
+    assert "Using lead 1" in html
+    assert 'href="?preview_lead=2"' in html
+    assert not hasattr(django_admin.site._registry[Destination], "_preview_lead_id")
+
+
+def test_saving_form_with_destinations_offers_unrouted_leads(admin_client):
+    lead = make_lead(status=Lead.Status.UNROUTED)
+    form = lead.form
+    destination = make_destination()
+    response = admin_client.post(
+        reverse("admin:meta_form_change", args=[form.pk]),
+        {
+            "page": form.page.pk,
+            "form_id": form.form_id,
+            "name": form.name,
+            "locale": form.locale,
+            "status": form.status,
+            "destinations": [destination.pk],
+        },
+        follow=True,
+    )
+    text = " ".join(str(m) for m in get_messages(response.wsgi_request))
+    assert "1 unrouted lead(s)" in text
+    assert f"form__id__exact={form.pk}" in text

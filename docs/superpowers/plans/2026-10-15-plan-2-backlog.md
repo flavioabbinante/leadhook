@@ -1,5 +1,7 @@
 # Plan 2 backlog (carried over from Plan 1 reviews)
 
+> **Status:** triaged in `2026-10-19-plan-2-operations.md` (section "Backlog triage"); every item is either implemented there, already fixed, or dropped with its ruling.
+
 Items deferred during the Plan 1 (core pipeline) reviews. Plan 2 must address or explicitly drop each.
 
 - Task 1-5: minor (deferred): malformed LEADHOOK_ENCRYPTION_KEY only fails on first use (validate Fernet key in settings)

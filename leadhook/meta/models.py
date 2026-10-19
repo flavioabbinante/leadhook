@@ -54,6 +54,7 @@ class Page(models.Model):
     last_checked_at = models.DateTimeField(null=True, blank=True)
     last_lead_at = models.DateTimeField(null=True, blank=True)
     error = models.TextField(blank=True)
+    silence_alerted_at = models.DateTimeField(null=True, blank=True)
     default_destinations = models.ManyToManyField(
         "destinations.Destination",
         blank=True,
@@ -72,6 +73,7 @@ class Form(models.Model):
     locale = models.CharField(max_length=16, blank=True)
     status = models.CharField(max_length=32, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_reconciled_at = models.DateTimeField(null=True, blank=True)
     destinations = models.ManyToManyField(
         "destinations.Destination",
         blank=True,

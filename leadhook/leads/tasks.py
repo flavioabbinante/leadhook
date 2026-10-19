@@ -1,9 +1,25 @@
+import logging
+
 from celery import shared_task
 from django.utils import timezone
 
+from leadhook.core.alerts import AlertKind, send_alert
+from leadhook.meta.graph import GraphError, client_for_page
+from leadhook.meta.models import Form
+from leadhook.meta.services import record_page_error
+
 from .models import Lead, WebhookEvent
 from .parsing import extract_leadgen_changes
-from .services import FETCH_BACKOFF, FetchOutcome, fetch_lead_details, ingest_lead
+from .retention import purge_expired_data
+from .services import (
+    FETCH_BACKOFF,
+    FetchOutcome,
+    fetch_lead_details,
+    ingest_lead,
+    reconcile_form,
+)
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task
@@ -39,7 +55,14 @@ def fetch_lead(self, lead_id: int, attempt: int = 0) -> None:
     outcome = fetch_lead_details(lead)
     if outcome == FetchOutcome.RETRY:
         if attempt >= len(FETCH_BACKOFF):
-            return  # stays "received" with its error; reprocess or reconciliation picks it up
+            # Stays "received" with its error; the hourly sweep (and reconciliation) retry it.
+            send_alert(
+                AlertKind.FETCH_FAILED,
+                "Lead could not be fetched",
+                f"Lead {lead.leadgen_id} could not be read from Meta after {attempt + 1} "
+                f"attempts: {lead.error}\nLeadHook keeps retrying it every hour for 7 days.",
+            )
+            return
         raise self.retry(
             args=(lead_id,), kwargs={"attempt": attempt + 1}, countdown=FETCH_BACKOFF[attempt]
         )
@@ -47,3 +70,28 @@ def fetch_lead(self, lead_id: int, attempt: int = 0) -> None:
         from leadhook.destinations.tasks import route_lead
 
         route_lead.delay(lead.pk)
+
+
+@shared_task
+def reconcile_leads() -> None:
+    """Recover leads whose webhook never arrived (spec §5)."""
+    from leadhook.destinations.tasks import route_lead
+
+    now = timezone.now()
+    # shortcut: one Graph call per active form every 15 minutes; batch by page if rate limits bite.
+    for form in Form.objects.filter(status="ACTIVE").select_related("page__meta_app"):
+        try:
+            leads = reconcile_form(form, client_for_page(form.page), now=now)
+        except GraphError as exc:
+            if exc.is_token_error:
+                record_page_error(form.page, f"Meta rejected the page token: {exc}")
+            else:
+                logger.warning("Reconciliation of form %s failed: %s", form.form_id, exc)
+            continue
+        for lead in leads:
+            route_lead.delay(lead.pk)
+
+
+@shared_task
+def purge_old_data() -> None:
+    logger.info("Retention purge: %s", purge_expired_data(now=timezone.now()))

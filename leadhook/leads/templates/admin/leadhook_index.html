@@ -1,0 +1,3 @@
+{% extends "admin/index.html" %}
+{% load leadhook_dashboard %}
+{% block content %}{% leadhook_dashboard %}{{ block.super }}{% endblock %}

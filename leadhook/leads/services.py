@@ -1,18 +1,21 @@
 """Lead ingestion and fetching. Celery-free so it can be tested and reused directly."""
 
+from datetime import datetime, timedelta
 from enum import StrEnum
 
-from django.db import models
 from django.utils import timezone
 
 from leadhook.meta.graph import GraphClient, GraphError, client_for_page
 from leadhook.meta.models import Form, Page
+from leadhook.meta.services import fit_to_field, record_page_error
 
 from .models import Lead
 from .parsing import parse_meta_time, simplify_field_data
 
 # Seconds to wait before each retry of a transient Graph API failure.
 FETCH_BACKOFF = [30, 120, 600, 1800, 3600, 3600]
+RECONCILE_OVERLAP = timedelta(hours=1)
+RECONCILE_FIRST_WINDOW = timedelta(days=1)
 
 
 class FetchOutcome(StrEnum):
@@ -36,12 +39,6 @@ def ingest_lead(
     return lead if created else None
 
 
-def _fit(model: type[models.Model], field: str, value) -> str:
-    """Coerce a Graph API value to text that fits the field (Meta names can be longer)."""
-    text = "" if value is None else str(value)
-    return text[: model._meta.get_field(field).max_length]
-
-
 def _resolve_page(lead: Lead) -> Page | None:
     if lead.page is not None:
         return lead.page
@@ -62,9 +59,9 @@ def _get_or_create_form(page: Page, form_external_id: str, client: GraphClient) 
         form_id=form_external_id,
         defaults={
             "page": page,
-            "name": _fit(Form, "name", raw.get("name")),
-            "locale": _fit(Form, "locale", raw.get("locale")),
-            "status": _fit(Form, "status", raw.get("status")),
+            "name": fit_to_field(Form, "name", raw.get("name")),
+            "locale": fit_to_field(Form, "locale", raw.get("locale")),
+            "status": fit_to_field(Form, "status", raw.get("status")),
             "last_synced_at": timezone.now() if raw else None,
         },
     )
@@ -90,14 +87,20 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
         lead.error = str(exc)
         lead.save(update_fields=["page", "error", "updated_at"])
         if exc.is_token_error:
-            page.error = f"Meta rejected the page token: {exc}"
-            page.save(update_fields=["error"])
+            record_page_error(page, f"Meta rejected the page token: {exc}")
             return FetchOutcome.GIVE_UP
         return FetchOutcome.RETRY if exc.is_transient else FetchOutcome.GIVE_UP
 
+    store_lead_details(lead, page, raw, client)
+    return FetchOutcome.DONE
+
+
+def store_lead_details(lead: Lead, page: Page, raw: dict, client: GraphClient) -> None:
+    """Save a Graph API lead object on `lead` and mark it fetched."""
+    lead.page = page
     lead.created_time = parse_meta_time(raw.get("created_time"))
     for name in ("ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"):
-        setattr(lead, name, _fit(Lead, name, raw.get(name)))
+        setattr(lead, name, fit_to_field(Lead, name, raw.get(name)))
     lead.is_organic = bool(raw.get("is_organic", False))
     lead.field_data = raw.get("field_data") or []
     lead.data = simplify_field_data(lead.field_data)
@@ -107,4 +110,29 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
     lead.error = ""
     lead.save()
     Page.objects.filter(pk=page.pk).update(last_lead_at=timezone.now(), error="")
-    return FetchOutcome.DONE
+
+
+def reconcile_form(form: Form, client: GraphClient, *, now: datetime) -> list[Lead]:
+    """Store leads Meta has for the form that LeadHook never fetched; return them for routing."""
+    since = (form.last_reconciled_at or now - RECONCILE_FIRST_WINDOW) - RECONCILE_OVERLAP
+    found: list[Lead] = []
+    for raw in client.list_form_leads(form.form_id, since=since):
+        leadgen_id = str(raw.get("id") or "")
+        if not leadgen_id:
+            continue
+        lead = ingest_lead(
+            leadgen_id=leadgen_id,
+            page_external_id=form.page.page_id,
+            form_external_id=form.form_id,
+            source=Lead.Source.RECONCILE,
+        )
+        if lead is None:
+            # Known lead: finish it only if its own fetch never succeeded.
+            lead = Lead.objects.filter(leadgen_id=leadgen_id, status=Lead.Status.RECEIVED).first()
+        if lead is None:
+            continue
+        store_lead_details(lead, form.page, raw, client)
+        found.append(lead)
+    form.last_reconciled_at = now
+    form.save(update_fields=["last_reconciled_at"])
+    return found
