@@ -8,6 +8,7 @@ from leadhook.destinations.models import Delivery
 from leadhook.leads.models import Lead, WebhookEvent
 from leadhook.leads.services import FETCH_BACKOFF, FetchOutcome
 from leadhook.leads.tasks import fetch_lead, process_event
+from leadhook.meta.models import Page
 from tests.factories import make_destination, make_form, make_page
 from tests.fixtures import GRAPH_LEAD, leadgen_payload
 
@@ -119,3 +120,30 @@ def test_fetch_lead_gives_up_after_last_attempt():
     retry.assert_not_called()
     lead.refresh_from_db()
     assert lead.status == Lead.Status.RECEIVED
+
+
+@responses.activate
+def test_fetch_lead_token_error_flags_page_and_alerts(mailoutbox):
+    make_form()
+    lead = Lead.objects.create(leadgen_id="333", page_external_id="111", form_external_id="222")
+    responses.get(
+        f"{BASE}/333",
+        status=400,
+        json={"error": {"message": "Error validating access token", "code": 190}},
+    )
+    fetch_lead(lead.pk)  # gives up without raising Retry
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.RECEIVED
+    assert Page.objects.get(page_id="111").error.startswith("Meta rejected the page token")
+    assert len(mailoutbox) == 1
+    assert "page-token" not in mailoutbox[0].body
+
+
+@responses.activate
+def test_fetch_lead_exhaustion_alerts(mailoutbox):
+    make_form()
+    lead = Lead.objects.create(leadgen_id="333", page_external_id="111", form_external_id="222")
+    responses.get(f"{BASE}/333", status=500)
+    fetch_lead(lead.pk, attempt=len(FETCH_BACKOFF))
+    assert len(mailoutbox) == 1
+    assert "could not be read from Meta" in mailoutbox[0].body

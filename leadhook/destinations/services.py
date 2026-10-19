@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from django.db.models import F, Q
 from django.utils import timezone
 
+from leadhook.core.alerts import AlertKind, send_alert
 from leadhook.leads.models import Lead
 from leadhook.routing.resolve import resolve_destinations
 
@@ -26,6 +27,14 @@ def create_deliveries(lead: Lead) -> list[Delivery]:
     """Create one Delivery per resolved destination; return those still pending."""
     destinations = resolve_destinations(lead)
     if not destinations:
+        if lead.status != Lead.Status.UNROUTED:
+            send_alert(
+                AlertKind.UNROUTED,
+                "Lead not routed",
+                f"Lead {lead.leadgen_id} (page {lead.page_external_id}, form "
+                f"{lead.form_external_id}) has no active destination. Assign one to the form "
+                "or a default to the page, then reprocess the lead.",
+            )
         lead.status = Lead.Status.UNROUTED
         lead.save(update_fields=["status", "updated_at"])
         return []
@@ -152,6 +161,12 @@ def mark_delivery_failed(
             "updated_at",
             *extra_fields,
         ]
+    )
+    send_alert(
+        AlertKind.DELIVERY_FAILED,
+        f"Delivery to {delivery.destination} failed",
+        f"Lead {delivery.lead.leadgen_id} could not be delivered to {delivery.destination} "
+        f"({delivery.public_id}): {error}",
     )
 
 

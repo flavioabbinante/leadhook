@@ -3,6 +3,7 @@ from datetime import timedelta
 import pytest
 import responses
 from celery.exceptions import Retry
+from django.core.cache import cache
 from django.utils import timezone
 
 from leadhook.destinations.models import Delivery
@@ -185,3 +186,24 @@ def test_resend_restarts_retry_budget():
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.FAILED
     assert delivery.attempts == 2 * (len(DELIVERY_BACKOFF) + 1)
+
+
+@responses.activate
+def test_failed_delivery_alert_has_ids_only(mailoutbox):
+    responses.post(HOOK, status=400)
+    delivery = _pending_delivery()
+    deliver(delivery.pk)
+    assert len(mailoutbox) == 1
+    body = mailoutbox[0].body
+    assert "333" in body
+    assert "HTTP 400" in body
+    assert "Jane Doe" not in body
+
+
+def test_unrouted_lead_alerts_once(mailoutbox):
+    lead = make_lead()
+    route_lead(lead.pk)
+    cache.clear()  # rule out the throttle: the second run must stay quiet on its own
+    route_lead(lead.pk)
+    assert len(mailoutbox) == 1
+    assert "333" in mailoutbox[0].body
