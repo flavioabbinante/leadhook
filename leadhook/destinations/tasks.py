@@ -56,15 +56,17 @@ def deliver(self, delivery_id: int) -> None:
     if result.outcome == "skip":
         return
     if result.outcome == "retry":
+        lease = delivery.locked_until  # attempt_delivery keeps the lease on retry
         # 0 after the first attempt of a cycle; a cycle allows len(DELIVERY_BACKOFF) + 1 attempts.
         retry_index = delivery.attempts - delivery.retry_base - 1
         if retry_index >= len(DELIVERY_BACKOFF):
             mark_delivery_failed(
-                delivery, f"Gave up after {delivery.attempts} attempts: {result.error}"
+                delivery, f"Gave up after {delivery.attempts} attempts: {result.error}", lease=lease
             )
         else:
             delay = next_retry_delay(retry_index, result.retry_after)
-            schedule_retry(delivery, delay)
+            if not schedule_retry(delivery, delay, lease=lease):
+                return
             raise self.retry(countdown=delay)
     refresh_lead_status(delivery.lead)
 
