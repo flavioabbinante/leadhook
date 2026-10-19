@@ -149,6 +149,9 @@ CELERY_BEAT_SCHEDULE = {
 
 META_GRAPH_VERSION = env("META_GRAPH_VERSION", default="v26.0")
 ALLOW_PRIVATE_DESTINATIONS = env.bool("ALLOW_PRIVATE_DESTINATIONS", default=False)
+# Custom CA bundle for destinations behind a private CA (requests ignores the env var
+# because the outbound session disables trust_env).
+DESTINATION_CA_BUNDLE = env("REQUESTS_CA_BUNDLE", default="")
 
 LOGGING = {
     "version": 1,

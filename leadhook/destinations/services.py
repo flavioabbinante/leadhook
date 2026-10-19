@@ -10,7 +10,7 @@ from leadhook.core.alerts import AlertKind, send_alert
 from leadhook.leads.models import Lead
 from leadhook.routing.resolve import resolve_destinations
 
-from .http import SendResult, build_headers, send_request
+from .http import SendResult, build_headers, redact_url, send_request
 from .models import Delivery
 from .payload import build_context, render_body
 from .templating import TemplateError
@@ -63,7 +63,16 @@ def describe_unexpected_error(exc: Exception, destination) -> str:
     message = f"{type(exc).__name__}: {exc}"
     if destination.secret:
         message = message.replace(destination.secret, "***")
-    return message
+    return redact_url(message, destination.url)
+
+
+def _save_if_leased(delivery: Delivery, lease: datetime, fields: list[str]) -> bool:
+    """Write `fields` only while `lease` is still the delivery's lease (late results drop)."""
+    values = {name: getattr(delivery, name) for name in fields}
+    updated = Delivery.objects.filter(pk=delivery.pk, locked_until=lease).update(
+        **values, updated_at=timezone.now()
+    )
+    return bool(updated)
 
 
 def attempt_delivery(delivery: Delivery, *, now: datetime | None = None) -> SendResult:
@@ -113,21 +122,39 @@ def attempt_delivery(delivery: Delivery, *, now: datetime | None = None) -> Send
     delivery.response_body = result.response_body
     delivery.last_status_code = result.status_code
     if result.outcome == "fail":
-        mark_delivery_failed(
+        saved = mark_delivery_failed(
             delivery,
             result.error,
             extra_fields=("request_body", "response_body", "last_status_code"),
+            lease=lease,
         )
-        return result
-    delivery.last_error = result.error
-    delivery.next_retry_at = None
-    if result.outcome == "success":
-        delivery.status = Delivery.Status.SUCCESS
-        delivery.delivered_at = now
-        delivery.locked_until = None
-    # On retry the lease is kept until schedule_retry/mark_delivery_failed releases it,
-    # so no other worker can slip in between the attempt and its rescheduling.
-    delivery.save()
+    else:
+        delivery.last_error = result.error
+        delivery.next_retry_at = None
+        if result.outcome == "success":
+            delivery.status = Delivery.Status.SUCCESS
+            delivery.delivered_at = now
+            delivery.locked_until = None
+        # On retry the lease is kept until schedule_retry/mark_delivery_failed releases it,
+        # so no other worker can slip in between the attempt and its rescheduling.
+        saved = _save_if_leased(
+            delivery,
+            lease,
+            [
+                "request_body",
+                "response_body",
+                "last_status_code",
+                "last_error",
+                "next_retry_at",
+                "status",
+                "delivered_at",
+                "locked_until",
+            ],
+        )
+    if not saved:
+        # The send outlived the lease and another attempt took over: its result wins.
+        logger.warning("Delivery %s: lease lost before the result was saved", delivery.pk)
+        return SendResult("skip", error="Lease lost before the result was saved")
     return result
 
 
@@ -138,36 +165,50 @@ def next_retry_delay(retries_done: int, retry_after: int | None) -> int:
     return min(max(base, retry_after), MAX_RETRY_DELAY)
 
 
-def schedule_retry(delivery: Delivery, delay: int, *, now: datetime | None = None) -> None:
+def schedule_retry(
+    delivery: Delivery,
+    delay: int,
+    *,
+    now: datetime | None = None,
+    lease: datetime | None = None,
+) -> bool:
     delivery.next_retry_at = (now or timezone.now()) + timedelta(seconds=delay)
     delivery.locked_until = None
-    delivery.save(update_fields=["next_retry_at", "locked_until", "updated_at"])
+    fields = ["next_retry_at", "locked_until"]
+    if lease is not None:
+        return _save_if_leased(delivery, lease, fields)
+    delivery.save(update_fields=[*fields, "updated_at"])
+    return True
 
 
 def mark_delivery_failed(
-    delivery: Delivery, error: str, *, extra_fields: tuple[str, ...] = ()
-) -> None:
-    """The single place that marks a delivery FAILED (and releases its lease)."""
+    delivery: Delivery,
+    error: str,
+    *,
+    extra_fields: tuple[str, ...] = (),
+    lease: datetime | None = None,
+) -> bool:
+    """The single place that marks a delivery FAILED (and releases its lease).
+
+    With `lease`, nothing is written unless this worker still holds that lease.
+    """
     delivery.status = Delivery.Status.FAILED
     delivery.last_error = error
     delivery.next_retry_at = None
     delivery.locked_until = None
-    delivery.save(
-        update_fields=[
-            "status",
-            "last_error",
-            "next_retry_at",
-            "locked_until",
-            "updated_at",
-            *extra_fields,
-        ]
-    )
+    fields = ["status", "last_error", "next_retry_at", "locked_until", *extra_fields]
+    if lease is not None:
+        if not _save_if_leased(delivery, lease, fields):
+            return False
+    else:
+        delivery.save(update_fields=[*fields, "updated_at"])
     send_alert(
         AlertKind.DELIVERY_FAILED,
         f"Delivery to {delivery.destination} failed",
         f"Lead {delivery.lead.leadgen_id} could not be delivered to {delivery.destination} "
         f"({delivery.public_id}): {error}",
     )
+    return True
 
 
 def refresh_lead_status(lead: Lead) -> None:

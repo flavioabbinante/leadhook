@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import socket
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 
@@ -12,6 +13,7 @@ from leadhook.destinations.http import (
     build_headers,
     check_destination_url,
     parse_retry_after,
+    redact_url,
     send_request,
 )
 from leadhook.destinations.models import Destination
@@ -246,3 +248,79 @@ def test_blocked_message_does_not_leak_credentials_or_path(fake_dns):
 
 def test_parse_retry_after_with_huge_number_is_capped():
     assert parse_retry_after("9" * 5000) == 86400
+
+
+def test_no_auth_sends_no_credentials():
+    headers = build_headers(make_destination(), body="{}", timestamp=1, idempotency_key="333")
+    assert "Authorization" not in headers
+    assert "X-LeadHook-Signature" not in headers
+
+
+@pytest.mark.parametrize("status", [301, 303, 307, 308])
+@responses.activate
+def test_other_redirects_fail_without_following(status):
+    responses.post(URL, status=status, headers={"Location": "https://elsewhere.example.com/"})
+    result = send_request(make_destination(), "{}", HEADERS)
+    assert result.outcome == "fail"
+    assert len(responses.calls) == 1
+
+
+def test_dns_failure_is_retried(monkeypatch):
+    def fail(host, port):
+        raise socket.gaierror("Name or service not known")
+
+    monkeypatch.setattr("leadhook.destinations.http.resolve_host", fail)
+    result = send_request(make_destination(), "{}", HEADERS)
+    assert result.outcome == "retry"
+    assert "DNS resolution failed" in result.error
+
+
+def test_bad_idna_host_fails_even_when_private_allowed(settings):
+    settings.ALLOW_PRIVATE_DESTINATIONS = True
+    with pytest.raises(BlockedDestination, match="Invalid destination host name"):
+        check_destination_url("https://" + "a" * 64 + ".example.com/")
+
+
+def test_connection_to_private_peer_is_blocked_after_dns_check(fake_dns):
+    fake_dns["localhost"] = "93.184.216.34"  # the pre-check sees a public address...
+    with socket.create_server(("127.0.0.1", 0)) as server:  # ...the connection lands here
+        port = server.getsockname()[1]
+        destination = make_destination(url=f"http://localhost:{port}/lead")
+        result = send_request(destination, "{}", HEADERS)
+    assert result.outcome == "fail"
+    assert "non-public address (127.0.0.1)" in result.error
+
+
+@responses.activate
+def test_success_condition_reads_json_beyond_stored_limit():
+    responses.post(URL, json={"padding": "x" * 10000, "success": True})
+    destination = make_destination(success_condition="response.success == true")
+    result = send_request(destination, "{}", HEADERS)
+    assert result.outcome == "success"
+    assert len(result.response_body) == 4096
+
+
+@responses.activate
+def test_network_error_does_not_leak_url_secrets():
+    url = "https://hooks.example.com/webhook/0f1e2d3c?token=s3cret"
+    error = requests.ConnectionError(
+        "Max retries exceeded with url: /webhook/0f1e2d3c?token=s3cret"
+    )
+    responses.post(url, body=error)
+    result = send_request(make_destination(url=url), "{}", HEADERS)
+    assert result.outcome == "retry"
+    assert "s3cret" not in result.error
+    assert "0f1e2d3c" not in result.error
+
+
+def test_redact_url_removes_userinfo():
+    message = "failed for https://user:pw@hooks.example.com/x"
+    assert "pw" not in redact_url(message, "https://user:pw@hooks.example.com/x")
+
+
+@responses.activate
+def test_custom_ca_bundle_is_used(settings):
+    settings.DESTINATION_CA_BUNDLE = "/etc/ssl/custom-ca.pem"
+    responses.post(URL)
+    send_request(make_destination(), "{}", HEADERS)
+    assert responses.calls[0].request.req_kwargs["verify"] == "/etc/ssl/custom-ca.pem"

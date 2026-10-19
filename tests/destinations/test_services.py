@@ -261,3 +261,26 @@ def test_reset_for_resend_restarts_retry_budget():
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.PENDING
     assert delivery.retry_base == 7
+
+
+def _leased_by_someone_else():
+    lead = make_lead(status=Lead.Status.ROUTED)
+    delivery = Delivery.objects.create(lead=lead, destination=make_destination())
+    ours = NOW + timedelta(minutes=1)
+    Delivery.objects.filter(pk=delivery.pk).update(locked_until=ours + timedelta(hours=1))
+    return delivery, ours
+
+
+def test_mark_failed_with_lost_lease_changes_nothing(mailoutbox):
+    delivery, ours = _leased_by_someone_else()
+    assert not mark_delivery_failed(delivery, "late", lease=ours)
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.PENDING
+    assert mailoutbox == []
+
+
+def test_schedule_retry_with_lost_lease_changes_nothing():
+    delivery, ours = _leased_by_someone_else()
+    assert not schedule_retry(delivery, 60, lease=ours)
+    delivery.refresh_from_db()
+    assert delivery.next_retry_at is None
