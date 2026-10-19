@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "How LeadHook works",
+    "output": ".archify/leadhook-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:flavioabbinante/leadhook.git",
+      "provider": "github",
+      "link_mode": "local-only",
+      "revision": "c55e44c5df544f4e31e9a47458eda366d5e06c26"
+    }
+  },
+  "components": [
+    {
+      "id": "meta",
+      "type": "external",
+      "label": "Meta Lead Ads",
+      "sublabel": "FB + IG lead forms",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/urls.py",
+          "line": 19,
+          "end_line": 19,
+          "label": "webhook route"
+        }
+      ]
+    },
+    {
+      "id": "web",
+      "type": "backend",
+      "label": "Web",
+      "sublabel": "Django + gunicorn",
+      "tag": "HMAC check",
+      "pos": [
+        330,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/meta/views.py",
+          "line": 50,
+          "end_line": 87,
+          "label": "meta_webhook"
+        },
+        {
+          "path": "leadhook/core/views.py",
+          "line": 11,
+          "end_line": 27,
+          "label": "/health/"
+        }
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis",
+      "sublabel": "Celery broker + cache",
+      "pos": [
+        590,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/settings.py",
+          "line": 114,
+          "end_line": 127,
+          "label": "broker + cache"
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Celery worker",
+      "sublabel": "fetch \u2192 route \u2192 deliver",
+      "pos": [
+        850,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/leads/tasks.py",
+          "line": 25,
+          "end_line": 72,
+          "label": "process + fetch"
+        },
+        {
+          "path": "leadhook/destinations/tasks.py",
+          "line": 24,
+          "end_line": 71,
+          "label": "route + deliver"
+        }
+      ]
+    },
+    {
+      "id": "dest",
+      "type": "external",
+      "label": "Your webhooks",
+      "sublabel": "n8n \u00b7 Make \u00b7 CRM",
+      "pos": [
+        1130,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/destinations/http.py",
+          "line": 210,
+          "end_line": 265,
+          "label": "send_request"
+        }
+      ]
+    },
+    {
+      "id": "beat",
+      "type": "backend",
+      "label": "Celery beat",
+      "sublabel": "periodic jobs",
+      "pos": [
+        590,
+        110
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/settings.py",
+          "line": 141,
+          "end_line": 149,
+          "label": "beat schedule"
+        }
+      ]
+    },
+    {
+      "id": "graph",
+      "type": "external",
+      "label": "Meta Graph API",
+      "sublabel": "lead details",
+      "pos": [
+        1130,
+        110
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/meta/graph.py",
+          "line": 117,
+          "end_line": 133,
+          "label": "get_lead"
+        }
+      ]
+    },
+    {
+      "id": "operator",
+      "type": "external",
+      "label": "Operator",
+      "sublabel": "browser",
+      "pos": [
+        40,
+        490
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/meta/setup.py",
+          "line": 39,
+          "end_line": 64,
+          "label": "setup wizard"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "events \u00b7 leads \u00b7 deliveries",
+      "pos": [
+        590,
+        490
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/settings.py",
+          "line": 80,
+          "end_line": 80,
+          "label": "DATABASE_URL"
+        }
+      ]
+    },
+    {
+      "id": "smtp",
+      "type": "external",
+      "label": "Email alerts",
+      "sublabel": "SMTP \u00b7 ALERT_EMAILS",
+      "pos": [
+        1130,
+        490
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "leadhook/core/alerts.py",
+          "line": 28,
+          "end_line": 47,
+          "label": "send_alert"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "docker compose",
+      "wraps": [
+        "web",
+        "redis",
+        "worker",
+        "beat",
+        "db"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "leadgen-webhook",
+      "from": "meta",
+      "to": "web",
+      "label": "leadgen webhook",
+      "variant": "emphasis"
+    },
+    {
+      "id": "enqueue",
+      "from": "web",
+      "to": "redis",
+      "label": "enqueue"
+    },
+    {
+      "id": "consume",
+      "from": "redis",
+      "to": "worker",
+      "label": "tasks"
+    },
+    {
+      "id": "deliver",
+      "from": "worker",
+      "to": "dest",
+      "label": "POST JSON",
+      "variant": "emphasis"
+    },
+    {
+      "id": "fetch",
+      "from": "worker",
+      "to": "graph",
+      "label": "GET lead",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "schedule",
+      "from": "beat",
+      "to": "redis",
+      "label": "schedule",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "store-event",
+      "from": "web",
+      "to": "db",
+      "label": "store event",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "store-lead",
+      "from": "worker",
+      "to": "db",
+      "label": "leads, deliveries",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "alert",
+      "from": "worker",
+      "to": "smtp",
+      "label": "alerts",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "admin",
+      "from": "operator",
+      "to": "web",
+      "label": "admin",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Pipeline",
+      "items": [
+        "Webhook signature verified, event stored before 200 OK",
+        "Lead fetched with the page token, routed by form or page default",
+        "One delivery per destination, Idempotency-Key, 7 attempts over ~1.5 days"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Periodic jobs (beat)",
+      "items": [
+        "reconcile_leads every 15 min, sweep_stuck_work every 5 min",
+        "sync_forms and check_silence hourly; check_pages and purge_old_data daily",
+        "heartbeat every minute, read by /health/"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Safety",
+      "items": [
+        "Secrets Fernet-encrypted at rest",
+        "SSRF guard re-checks the connected IP (DNS rebinding)",
+        "Late results after a lost lease are discarded"
+      ]
+    }
+  ]
+}

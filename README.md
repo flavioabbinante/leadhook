@@ -1,29 +1,73 @@
-# LeadHook
+<div align="center">
 
-Self-hosted router for **Facebook & Instagram Lead Ads**. LeadHook receives leads from all your pages and forms through a single Meta app and forwards them to any webhook — n8n, Make, Zapier or your own CRM.
+# 🪝 LeadHook
 
-Why: n8n's Facebook Lead Ads trigger can only hold one subscription per Meta app, so running several pages or campaigns at once means fighting over the same callback URL. LeadHook owns that callback and routes every lead where it belongs.
+**Every Facebook & Instagram lead, delivered to the right webhook — from all your pages, through one Meta app.**
 
-## Features
+Self-hosted · open source · built for n8n, Make, Zapier and any CRM with an API.
 
-- One Meta app, unlimited pages and forms.
-- Route by form, with a default per page; leads with no route are kept as *unrouted*, never lost.
-- Standard payload compatible with n8n's Facebook Lead Ads trigger, or your own JSON via sandboxed Jinja2 templates.
-- Bearer, custom header or HMAC-signed requests; optional success condition on the response body.
-- Automatic retries with backoff for about a day and a half (7 attempts); one-click resend from the admin.
-- Duplicate-proof: each lead is delivered once per destination, with an `Idempotency-Key` header.
-- Secrets encrypted at rest.
-- No lost leads: reconciliation every 15 minutes recovers leads whose webhook never arrived, and a sweeper re-dispatches work lost by a restart.
-- Email alerts, an admin dashboard and a `/health/` endpoint for uptime monitors.
-- Guided setup in the admin, including a "Send test lead" button.
-- Personal data erased after `LEAD_RETENTION_DAYS` (90 by default).
+[![CI](https://github.com/flavioabbinante/leadhook/actions/workflows/ci.yml/badge.svg)](https://github.com/flavioabbinante/leadhook/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-## Quick start
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://github.com/python/cpython)
+[![Django 5.2](https://img.shields.io/badge/Django-5.2_LTS-092E20?logo=django&logoColor=white)](https://github.com/django/django)
+[![Celery 5](https://img.shields.io/badge/Celery-5-37814A?logo=celery&logoColor=white)](https://github.com/celery/celery)
+[![Redis 7](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://github.com/redis/redis)
+[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://github.com/postgres/postgres)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://github.com/docker/compose)
+
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Works with n8n](https://img.shields.io/badge/works_with-n8n-EA4B71?logo=n8n&logoColor=white)](https://github.com/n8n-io/n8n)
+
+[Quick start](#-quick-start) ·
+[How it works](#-how-it-works) ·
+[Meta setup](#-meta-app-setup) ·
+[Payload](#-payload) ·
+[Configuration](#-configuration) ·
+[Contributing](CONTRIBUTING.md)
+
+</div>
+
+---
+
+## ✨ Why LeadHook?
+
+n8n's Facebook Lead Ads trigger holds **one subscription per Meta app**. Run several pages or campaigns and they fight over the same callback URL; route by hard-coded form IDs and every new campaign means editing a workflow.
+
+LeadHook owns that callback. It receives leads from **every page and form**, fetches the full answers from the Graph API, and forwards each one to the destination you picked for its form — or the page default — with retries, signatures and an audit trail.
+
+| | |
+|---|---|
+| 🔀 **One app, unlimited pages** | Route by form, fall back to a default per page. Leads with no route are kept as *unrouted*, never lost. |
+| 🧩 **Drop-in for n8n** | The standard payload matches n8n's Facebook Lead Ads trigger. Need something else? Write it with sandboxed Jinja2 templates. |
+| 🔁 **Delivered, exactly once per destination** | 7 attempts over ~1.5 days with backoff and `Retry-After`, `Idempotency-Key` on every request, one-click resend. |
+| 🛟 **No lost leads** | Every event is stored before Meta gets a 200. Reconciliation every 15 minutes recovers leads whose webhook never arrived. |
+| 🔐 **Secure by default** | Signed webhooks, Fernet-encrypted secrets, HMAC/Bearer/header auth, SSRF guard that also blocks DNS rebinding. |
+| 📈 **Easy to run** | `docker compose up`, a guided setup with "Send test lead", dashboard, email alerts and `/health/`. |
+
+## 🧭 How it works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
+  <img alt="LeadHook architecture: Meta Lead Ads sends a signed leadgen webhook to the Django web app, which stores the event in PostgreSQL and enqueues it on Redis. A Celery worker fetches the lead from the Meta Graph API, routes it and POSTs JSON to your webhooks, sending email alerts on failures. Celery beat schedules reconciliation, sweeping, form sync, page checks, silence checks, retention and the heartbeat." src="docs/images/architecture-light.png">
+</picture>
+
+1. **Receive** — Meta POSTs a signed `leadgen` event; LeadHook verifies `X-Hub-Signature-256`, stores it and answers 200 right away.
+2. **Fetch** — a worker reads the full lead (answers, ad, campaign) from the Graph API with the page token.
+3. **Route** — form destinations win; otherwise the page defaults; otherwise the lead waits as *unrouted*.
+4. **Deliver** — one delivery per destination, signed and retried; the lead's status follows its deliveries.
+5. **Keep watch** — beat runs reconciliation, a sweeper for lost work, form sync, token checks, silence alerts and retention.
+
+<sub>Diagram generated with [Archify](https://github.com/tt-a1i/archify) from `docs/architecture.archify.json`.</sub>
+
+## 🚀 Quick start
 
 Requirements: Docker with Compose, a public HTTPS URL served by a reverse proxy (Caddy, Traefik, nginx…) that forwards to port 8000. Compose publishes the web container on `127.0.0.1:8000` only, so it is reachable from the host (and the proxy) but not directly from the internet; keep it behind the proxy.
 
 ```bash
-git clone https://github.com/<you>/leadhook.git && cd leadhook
+git clone https://github.com/flavioabbinante/leadhook.git && cd leadhook
 cp .env.example .env
 # Fill in DJANGO_SECRET_KEY, LEADHOOK_ENCRYPTION_KEY, PUBLIC_BASE_URL and ALLOWED_HOSTS
 docker compose up -d
@@ -32,7 +76,7 @@ docker compose exec web python manage.py createsuperuser
 
 Open `https://<your-domain>/admin/`, then **Set up LeadHook** (`/admin/setup/`, also linked from the dashboard) and follow the steps.
 
-## Meta app setup
+## 📘 Meta app setup
 
 LeadHook uses your own Meta app. One-time preparation in Meta:
 
@@ -51,7 +95,7 @@ Then in LeadHook, open **Set up LeadHook** (`/admin/setup/`):
 4. Create a destination and set it as a page default (or on single forms).
 5. **Send test lead** and watch it arrive under Leads and Deliveries.
 
-## Payload
+## 📦 Payload
 
 With an empty template, every destination receives:
 
@@ -95,7 +139,7 @@ Always end each value with `| tojson`. The admin shows a live preview of the ren
 
 Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h (`Retry-After` is honored) — 7 attempts over about a day and a half. Other 4xx responses fail immediately. Finished deliveries (successful or failed) can be resent from **Deliveries** in the admin, which starts a fresh cycle of 7 attempts; deliveries still pending are skipped.
 
-## Monitoring
+## 📊 Monitoring
 
 - **Dashboard** (admin home): leads today and per form, failed deliveries, unrouted leads, page health, background job status.
 - **Email alerts** to `ALERT_EMAILS`: permanently failed delivery, unrouted lead, page token or subscription problem, lead that could not be fetched, unusual silence. At most one email per kind every 15 minutes.
@@ -103,7 +147,7 @@ Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 mi
 - **Background jobs** (Celery beat): reconciliation (15 min), sweeper (5 min), form sync (1 h), silence check (1 h), page and token check (daily), retention purge (daily).
 - **Retention:** after `LEAD_RETENTION_DAYS` the lead answers, webhook payloads and request/response bodies are erased; IDs, ad/campaign names and statuses are kept. Purged leads cannot be resent.
 
-## Configuration
+## 🔧 Configuration
 
 | Variable | Default | Description |
 |---|---|---|
@@ -128,20 +172,16 @@ Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 mi
 | `SILENCE_ALERT_HOURS` | `24` | Alert when a page that had leads in the last 30 days has none for this long. |
 | `REQUESTS_CA_BUNDLE` | — | CA bundle for destinations behind a private certificate authority. |
 
-## Development
+## 🧪 Development
 
 ```bash
 uv sync
-cp .env.example .env   # set LEADHOOK_ENCRYPTION_KEY, DJANGO_DEBUG=true, remove DATABASE_URL,
-                       # and set REDIS_URL=redis://localhost:6379/0 (the compose host name "redis"
-                       # does not resolve outside Docker)
-uv run python manage.py migrate
-uv run pytest
+uv run pytest            # ~300 tests, no Redis or PostgreSQL needed
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Tests run Celery tasks eagerly on in-memory SQLite and need neither Redis nor PostgreSQL. To run them against PostgreSQL, set `LEADHOOK_TEST_DATABASE_URL` (CI does). To run a real worker locally, start Redis (e.g. `docker run -p 6379:6379 redis:7-alpine`) and run `uv run celery -A leadhook worker` with `REDIS_URL=redis://localhost:6379/0`.
+Local setup, project layout, testing conventions and the pull request checklist are in **[CONTRIBUTING.md](CONTRIBUTING.md)**. Found a vulnerability? See **[SECURITY.md](SECURITY.md)**.
 
-## License
+## 📄 License
 
 [GNU AGPL-3.0](LICENSE). If you run a modified version as a service, you must publish your changes.
