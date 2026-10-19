@@ -167,7 +167,7 @@ In `data`: single value → string; multiple values → array.
 - Engine: **Jinja2 `SandboxedEnvironment`**, autoescape off, undefined variables render as empty.
 - Context: the same fields as the standard payload (`id`, `data`, `form`, `page`, `ad`, `adset`, `campaign`, `created_time`, `is_organic`, `field_data`, `_leadhook`).
 - The rendered output must be valid JSON; otherwise the delivery fails without retry.
-- Built-in filters: `tojson`, `first_word`, `rest_words`, `phone_strip_prefix(prefix)` (removes whitespace and the given country prefix, e.g. `"+39"`), `date(tz, format)`, `map(dict)` (unmapped value → unchanged), `default`.
+- Built-in filters: `tojson`, `first_word`, `rest_words`, `phone_strip_prefix(prefix)` (removes whitespace and the given country prefix, e.g. `"+39"`), `date(tz, format)`, `map_value(dict)` (unmapped value → unchanged; lists are mapped item by item — named `map_value` because Jinja already has a built-in `map`), `default`.
 - Admin: preview of the rendered payload against a real lead of choice.
 
 ### Headers

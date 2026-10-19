@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.env
+.superpowers
+db.sqlite3
+staticfiles
+.pytest_cache
+.ruff_cache
+**/__pycache__
+docs
+tests
+*.md
+!README.md
