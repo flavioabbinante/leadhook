@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from leadhook.leads.parsing import (
     LeadgenChange,
     extract_leadgen_changes,
@@ -75,3 +77,23 @@ def test_extract_skips_changes_whose_value_is_not_an_object():
         ]
     }
     assert [c.leadgen_id for c in extract_leadgen_changes(payload)] == ["9"]
+
+
+def test_simplify_field_data_skips_malformed_items():
+    field_data = [
+        {"values": ["no name"]},
+        "junk",
+        {"name": "", "values": ["empty name"]},
+        {"name": "city", "values": "Rome"},
+        {"name": "note", "values": None},
+    ]
+    assert simplify_field_data(field_data) == {"city": "Rome", "note": ""}
+
+
+def test_simplify_field_data_non_list_input():
+    assert simplify_field_data({"full_name": "x"}) == {}
+
+
+@pytest.mark.parametrize("value", ["yesterday", "2026-13-01T00:00:00+0000", 1760517000, ""])
+def test_parse_meta_time_malformed_is_none(value):
+    assert parse_meta_time(value) is None
