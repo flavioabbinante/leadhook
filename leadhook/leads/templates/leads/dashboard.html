@@ -1,44 +1,139 @@
-{% if not setup_complete %}<p class="errornote">Setup is not complete. <a href="{% url 'setup' %}">Continue the guided setup</a>.</p>{% endif %}
-<div class="module" id="leadhook-dashboard">
-  <table>
-    <caption>Overview</caption>
-    <tr><th scope="row">Leads today</th><td>{{ leads_today }}</td></tr>
-    <tr><th scope="row">Leads in the last 7 days</th><td>{{ leads_week }}</td></tr>
-    <tr><th scope="row">Failed deliveries</th>
-      <td><a href="{% url 'admin:destinations_delivery_changelist' %}?status__exact=failed">{{ failed_deliveries }}</a></td></tr>
-    <tr><th scope="row">Unrouted leads</th>
-      <td><a href="{% url 'admin:leads_lead_changelist' %}?status__exact=unrouted">{{ unrouted_leads }}</a></td></tr>
-    <tr><th scope="row">Leads waiting for Meta for over 1 hour</th>
-      <td><a href="{% url 'admin:leads_lead_changelist' %}?status__exact=received">{{ waiting_for_meta }}</a></td></tr>
-    <tr><th scope="row">Background jobs</th>
-      <td>{% if beat_ok %}Running{% else %}<strong>Not running</strong>: check the worker and beat containers.{% endif %}</td></tr>
-  </table>
+{% load leadhook_ui %}
+{% if not setup_complete %}
+<div class="lh-callout">
+  <span class="lh-icon-chip lh-chip-orange"><svg aria-hidden="true"><use href="#lh-wand"></use></svg></span>
+  <div><strong>Setup is not complete.</strong> Connect your Meta app, pages and a destination to start receiving leads.</div>
+  <a class="lh-btn lh-btn-dark" href="{% url 'setup' %}">Continue the guided setup</a>
 </div>
-<div class="module">
-  <table>
-    <caption>Pages</caption>
-    <thead><tr><th scope="col">Page</th><th scope="col">Subscribed</th><th scope="col">Last lead</th><th scope="col">Last check</th><th scope="col">Problem</th></tr></thead>
-    {% for page in pages %}
-      <tr>
-        <td><a href="{% url 'admin:meta_page_change' page.pk %}">{{ page }}</a></td>
-        <td>{{ page.subscribed|yesno:"Yes,No" }}</td>
-        <td>{{ page.last_lead_at|default:"—" }}</td>
-        <td>{{ page.last_checked_at|default:"—" }}</td>
-        <td>{{ page.error|default:"—" }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="5">No pages connected yet.</td></tr>
-    {% endfor %}
-  </table>
+{% endif %}
+
+<div class="lh-grid lh-grid-top">
+  <div class="lh-kpis">
+    <div class="lh-kpi lh-kpi-orange">
+      <span class="lh-kpi-icon"><svg aria-hidden="true"><use href="#lh-inbox"></use></svg></span>
+      <div class="lh-kpi-row"><span class="lh-kpi-value">{{ leads_today }}</span><span class="lh-kpi-trend">{% trend leads_today leads_yesterday %}</span></div>
+      <span class="lh-kpi-label">Leads today</span>
+    </div>
+    <div class="lh-kpi">
+      <span class="lh-kpi-icon"><svg aria-hidden="true"><use href="#lh-calendar"></use></svg></span>
+      <div class="lh-kpi-row"><span class="lh-kpi-value">{{ leads_week }}</span><span class="lh-kpi-trend">{% trend leads_week leads_previous_week %}</span></div>
+      <span class="lh-kpi-label">Leads in the last 7 days</span>
+    </div>
+    <a class="lh-kpi" href="{% url 'admin:destinations_delivery_changelist' %}?status__exact=failed">
+      <span class="lh-kpi-icon"><svg aria-hidden="true"><use href="#lh-alert"></use></svg></span>
+      <div class="lh-kpi-row"><span class="lh-kpi-value">{{ failed_deliveries }}</span></div>
+      <span class="lh-kpi-label">Failed deliveries</span>
+    </a>
+    <a class="lh-kpi" href="{% url 'routing' %}" title="Connect them in Routing">
+      <span class="lh-kpi-icon"><svg aria-hidden="true"><use href="#lh-shuffle"></use></svg></span>
+      <div class="lh-kpi-row"><span class="lh-kpi-value">{{ unrouted_leads }}</span></div>
+      <span class="lh-kpi-label">Unrouted leads</span>
+    </a>
+  </div>
+
+  <section class="lh-card">
+    <h2 class="lh-card-title">Delivery health</h2>
+    <p class="lh-card-subtitle">Last 7 days · {{ delivery_total }} deliver{{ delivery_total|pluralize:"y,ies" }}</p>
+    <div class="lh-meter">
+      <div class="lh-meter-head"><span>Delivered</span><span>{{ delivery_success }}%</span></div>
+      <div class="lh-bar"><span class="lh-bar-fill lh-fill-orange" style="width: {{ delivery_success }}%"></span></div>
+    </div>
+    <div class="lh-meter">
+      <div class="lh-meter-head"><span>Retrying</span><span>{{ delivery_pending }}%</span></div>
+      <div class="lh-bar"><span class="lh-bar-fill lh-fill-orange" style="width: {{ delivery_pending }}%"></span></div>
+    </div>
+    <div class="lh-meter">
+      <div class="lh-meter-head"><span>Failed</span><span>{{ delivery_failed }}%</span></div>
+      <div class="lh-bar"><span class="lh-bar-fill lh-fill-orange" style="width: {{ delivery_failed }}%"></span></div>
+    </div>
+    <div class="lh-card-footer">
+      <p class="lh-muted">
+        <strong>{{ active_destinations }}</strong> active destination{{ active_destinations|pluralize }} ·
+        background jobs
+        {% if beat_ok %}<span class="lh-status lh-status-ok">Running</span>{% else %}<span class="lh-status lh-status-bad"><strong>Not running</strong></span>{% endif %}
+        {% if waiting_for_meta %}· <a href="{% url 'admin:leads_lead_changelist' %}?status__exact=received">{{ waiting_for_meta }} waiting for Meta</a>{% endif %}
+      </p>
+      <a class="lh-btn lh-btn-dark" href="{% url 'admin:destinations_delivery_changelist' %}">View deliveries</a>
+    </div>
+  </section>
 </div>
-<div class="module">
-  <table>
-    <caption>Leads by form (last 7 days)</caption>
-    <thead><tr><th scope="col">Form</th><th scope="col">Today</th><th scope="col">7 days</th></tr></thead>
-    {% for row in forms %}
-      <tr><td>{{ row.form__name|default:row.form_external_id }}</td><td>{{ row.today }}</td><td>{{ row.week }}</td></tr>
-    {% empty %}
-      <tr><td colspan="3">No leads in the last 7 days.</td></tr>
-    {% endfor %}
-  </table>
+
+<div class="lh-grid lh-grid-bottom">
+  <section class="lh-card lh-card-flush">
+    <div class="lh-card-head">
+      <div class="lh-card-head-row">
+        <div>
+          <h2 class="lh-card-title">Pages</h2>
+          <p class="lh-card-subtitle"><strong>{{ pages|length }}</strong> connected · leads in the last 7 days</p>
+        </div>
+        <a class="lh-btn lh-btn-outline" href="{% url 'routing' %}">Manage routing</a>
+      </div>
+    </div>
+    <table class="lh-table">
+      <thead><tr><th scope="col">Page</th><th scope="col">Status</th><th scope="col">Last lead</th><th scope="col" class="lh-col-bar">Leads, 7 days</th></tr></thead>
+      <tbody>
+      {% for page in pages %}
+        <tr>
+          <td>
+            <a class="lh-row-title" href="{% url 'admin:meta_page_change' page.pk %}">
+              <span class="lh-avatar">{{ page.name|default:page.page_id|first|upper }}</span>
+              <span>{{ page.name|default:"Page" }}<small>{{ page.page_id }}</small></span>
+            </a>
+          </td>
+          <td>
+            {% if page.error %}<span class="lh-badge lh-badge-danger" title="{{ page.error }}">Problem</span>
+            {% elif not page.subscribed %}<span class="lh-badge lh-badge-warning">Not subscribed</span>
+            {% else %}<span class="lh-badge lh-badge-success">Healthy</span>{% endif %}
+            {% if page.error %}<small class="lh-error-text">{{ page.error|truncatechars:60 }}</small>{% endif %}
+          </td>
+          <td>{{ page.last_lead_at|timesince|default:"—" }}{% if page.last_lead_at %} ago{% endif %}</td>
+          <td class="lh-col-bar">
+            <span class="lh-bar-label">{{ page.week }}</span>
+            <div class="lh-bar lh-bar-thin"><span class="lh-bar-fill lh-fill-blue" style="width: {{ page.share }}%"></span></div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="lh-empty">No pages connected yet. <a href="{% url 'setup' %}">Connect one in the setup</a>.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="lh-card-head lh-card-head-split">
+      <h2 class="lh-card-title">Leads by form</h2>
+      <p class="lh-card-subtitle">Last 7 days</p>
+    </div>
+    <table class="lh-table">
+      <thead><tr><th scope="col">Form</th><th scope="col" class="lh-num">Today</th><th scope="col" class="lh-num">7 days</th><th scope="col" class="lh-col-bar">Share</th></tr></thead>
+      <tbody>
+      {% for row in forms %}
+        <tr>
+          <td class="lh-row-strong">{{ row.form__name|default:row.form_external_id }}</td>
+          <td class="lh-num">{{ row.today }}</td>
+          <td class="lh-num">{{ row.week }}</td>
+          <td class="lh-col-bar"><div class="lh-bar lh-bar-thin"><span class="lh-bar-fill {% if row.share == 100 %}lh-fill-green{% else %}lh-fill-blue{% endif %}" style="width: {{ row.share }}%"></span></div></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="lh-empty">No leads in the last 7 days.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="lh-card">
+    <h2 class="lh-card-title">Recent leads</h2>
+    <p class="lh-card-subtitle"><strong>{{ leads_today }}</strong> today</p>
+    <ol class="lh-timeline">
+      {% for lead in recent_leads %}
+        <li class="lh-timeline-item lh-tone-{{ lead.status }}">
+          <span class="lh-timeline-dot"></span>
+          <a href="{% url 'admin:leads_lead_change' lead.pk %}">
+            <strong>{{ lead.get_status_display }}</strong> · {{ lead.form.name|default:lead.form_external_id|default:"Unknown form" }}
+          </a>
+          <small>{{ lead.received_at|date:"j M H:i" }} · {{ lead.leadgen_id }}</small>
+        </li>
+      {% empty %}
+        <li class="lh-empty">No leads yet. Send a test lead from the setup.</li>
+      {% endfor %}
+    </ol>
+  </section>
 </div>

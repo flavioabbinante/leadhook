@@ -1,0 +1,10 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:"LeadHook" }}{% endblock %}
+
+{% block branding %}
+<a class="lh-brand" href="{% url 'admin:index' %}">
+  <span class="lh-brand-mark"><svg aria-hidden="true"><use href="#lh-logo"></use></svg></span>
+  {{ site_header|default:"LeadHook" }}
+</a>
+{% endblock %}

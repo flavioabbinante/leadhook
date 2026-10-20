@@ -273,8 +273,9 @@ def test_dashboard_shows_counts_and_page_health(admin_client):
     html = admin_client.get(reverse("admin:index")).content.decode()
     assert "Leads today" in html
     assert "Meta rejected the page token: x" in html
-    assert 'status__exact=unrouted">1</a>' in html
-    assert 'status__exact=failed">1</a>' in html
+    assert 'href="/admin/routing/"' in html  # unrouted leads are fixed in Routing
+    assert "?status__exact=failed" in html
+    assert html.count('<span class="lh-kpi-value">1</span>') == 2  # failed deliveries, unrouted
     assert "Not running" in html  # no heartbeat recorded in tests
 
 
