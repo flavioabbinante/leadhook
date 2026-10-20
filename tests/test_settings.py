@@ -6,6 +6,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.management import call_command
+from django.utils.translation import gettext
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -56,3 +57,9 @@ def test_beat_schedule_tasks_exist():
         module, _, attr = entry["task"].rpartition(".")
         task = getattr(importlib.import_module(module), attr)
         assert callable(getattr(task, "delay", None)), name
+
+
+def test_italian_overrides_for_untranslated_django_strings(admin_client):
+    assert gettext("History") == "Cronologia"
+    catalog = admin_client.get("/admin/jsi18n/").content.decode()
+    assert "Scegli tutti: %s" in catalog

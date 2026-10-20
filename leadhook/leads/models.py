@@ -57,10 +57,10 @@ class Lead(models.Model):
         null=True,
         blank=True,
         related_name="leads",
-        verbose_name="modulo",
+        verbose_name="form",
     )
     page_external_id = models.CharField("ID pagina Meta", max_length=64, blank=True)
-    form_external_id = models.CharField("ID modulo Meta", max_length=64, blank=True)
+    form_external_id = models.CharField("ID form Meta", max_length=64, blank=True)
     created_time = models.DateTimeField("inviato il", null=True, blank=True)
     ad_id = models.CharField("ID inserzione", max_length=64, blank=True)
     ad_name = models.CharField("inserzione", max_length=255, blank=True)

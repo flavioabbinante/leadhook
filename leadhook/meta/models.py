@@ -80,7 +80,7 @@ class Page(models.Model):
         blank=True,
         related_name="default_for_pages",
         verbose_name="destinazioni predefinite",
-        help_text="Usate per i moduli di questa pagina che non hanno destinazioni proprie.",
+        help_text="Usate per i form di questa pagina che non hanno destinazioni proprie.",
     )
 
     class Meta:
@@ -95,7 +95,7 @@ class Form(models.Model):
     page = models.ForeignKey(
         Page, on_delete=models.CASCADE, related_name="forms", verbose_name="pagina"
     )
-    form_id = models.CharField("ID modulo", max_length=64, unique=True)
+    form_id = models.CharField("ID form", max_length=64, unique=True)
     name = models.CharField("nome", max_length=255, blank=True)
     locale = models.CharField("lingua", max_length=16, blank=True)
     status = models.CharField("stato", max_length=32, blank=True)
@@ -105,7 +105,7 @@ class Form(models.Model):
         "domande",
         default=list,
         blank=True,
-        help_text="Le domande del modulo come le elenca Meta (chiave, etichetta).",
+        help_text="Le domande del form come le elenca Meta (chiave, etichetta).",
     )
     destinations = models.ManyToManyField(
         "destinations.Destination",
@@ -113,14 +113,13 @@ class Form(models.Model):
         related_name="forms",
         verbose_name="destinazioni",
         help_text=(
-            "Se impostate, sostituiscono le destinazioni predefinite della pagina "
-            "per questo modulo."
+            "Se impostate, sostituiscono le destinazioni predefinite della pagina per questo form."
         ),
     )
 
     class Meta:
-        verbose_name = "modulo"
-        verbose_name_plural = "moduli"
+        verbose_name = "form"
+        verbose_name_plural = "form"
 
     def __str__(self) -> str:
-        return f"{self.name or 'Modulo'} ({self.form_id})"
+        return f"{self.name or 'Form'} ({self.form_id})"

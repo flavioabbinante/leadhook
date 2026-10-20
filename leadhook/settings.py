@@ -88,8 +88,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "it"
-TIME_ZONE = "UTC"
+TIME_ZONE = "Europe/Rome"
 USE_I18N = True
+# Italian strings Django does not translate yet; rebuild the .mo files after editing a .po.
+LOCALE_PATHS = [BASE_DIR / "leadhook" / "locale"]
 USE_TZ = True
 
 STATIC_URL = "static/"
