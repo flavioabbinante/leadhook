@@ -324,3 +324,13 @@ def test_custom_ca_bundle_is_used(settings):
     responses.post(URL)
     send_request(make_destination(), "{}", HEADERS)
     assert responses.calls[0].request.req_kwargs["verify"] == "/etc/ssl/custom-ca.pem"
+
+
+@responses.activate
+def test_telegram_posts_to_the_bot_api():
+    call = responses.post("https://api.telegram.org/bot123:abc/sendMessage", json={"ok": True})
+    destination = make_destination(
+        kind=Destination.Kind.TELEGRAM, url="", secret="123:abc", telegram_chat_id="-100"
+    )
+    assert send_request(destination, "{}", HEADERS).outcome == "success"
+    assert call.call_count == 1

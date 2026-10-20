@@ -1,0 +1,23 @@
+<div class="lh-insert">
+  <div class="lh-insert-row">
+    <span class="lh-insert-label">Form</span>
+    {% if forms %}
+      <select class="lh-insert-form" aria-label="Form whose questions to insert">
+        {% for form in forms %}<option value="{{ form.pk }}">{{ form.name|default:form.form_id }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <span class="lh-flow-detail">No form questions yet: connect a page in the setup.</span>
+    {% endif %}
+  </div>
+  {% for form in forms %}
+    <div class="lh-chips" data-form="{{ form.pk }}"{% if not forloop.first %} hidden{% endif %}>
+      {% for question in form.questions %}<button type="button" class="lh-chip" data-insert="{{ '{' }}{{ question.key }}{{ '}' }}" title="{{ '{' }}{{ question.key }}{{ '}' }}">{{ question.label }}</button>{% endfor %}
+    </div>
+  {% endfor %}
+  <div class="lh-insert-row">
+    <span class="lh-insert-label">Meta</span>
+    <div class="lh-chips">
+      {% for name, label in details %}<button type="button" class="lh-chip" data-insert="{{ '{' }}{{ name }}{{ '}' }}" title="{{ '{' }}{{ name }}{{ '}' }}">{{ label }}</button>{% endfor %}
+    </div>
+  </div>
+</div>
