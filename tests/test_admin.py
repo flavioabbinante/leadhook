@@ -8,8 +8,8 @@ from django.utils import timezone
 
 from leadhook.destinations.models import Delivery, Destination
 from leadhook.leads.models import Lead, WebhookEvent
-from leadhook.meta.models import MetaApp, Page
-from tests.factories import make_destination, make_lead, make_meta_app, make_page
+from leadhook.meta.models import Form, MetaApp, Page
+from tests.factories import make_destination, make_form, make_lead, make_meta_app, make_page
 
 
 def test_admin_pages_render(admin_client):
@@ -86,6 +86,31 @@ def test_destination_payload_preview(admin_client):
         reverse("admin:destinations_destination_change", args=[destination.pk])
     ).content.decode()
     assert "Jane Doe" in content
+
+
+def test_destination_field_mappings_offer_form_questions(admin_client):
+    make_lead()
+    Form.objects.update(questions=[{"key": "e-mail", "label": "Email"}])
+    destination = make_destination()
+    content = admin_client.get(
+        reverse("admin:destinations_destination_change", args=[destination.pk])
+    ).content.decode()
+    assert 'value="answer:e-mail"' in content
+    assert "Email (e-mail)" in content
+
+
+def test_destination_field_mappings_offer_only_routed_form_questions(admin_client):
+    destination = make_destination()
+    routed = make_lead().form
+    routed.questions = [{"key": "e-mail", "label": "Email"}]
+    routed.save()
+    routed.destinations.add(destination)
+    make_form(page=routed.page, form_id="999", questions=[{"key": "p_iva", "label": "P.Iva"}])
+    content = admin_client.get(
+        reverse("admin:destinations_destination_change", args=[destination.pk])
+    ).content.decode()
+    assert 'value="answer:e-mail"' in content
+    assert "answer:p_iva" not in content
 
 
 def test_destination_payload_preview_shows_template_errors(admin_client):
@@ -255,9 +280,16 @@ def test_saving_destination_without_secret_keeps_it(admin_client):
             "success_condition": "",
             "timeout_s": "15",
             "active": "on",
+            "field_mappings-TOTAL_FORMS": "1",
+            "field_mappings-INITIAL_FORMS": "0",
+            "field_mappings-0-target": "fields.canale",
+            "field_mappings-0-source": "fixed",
+            "field_mappings-0-fixed_value": "9",
+            "field_mappings-0-transform": "",
         },
     )
     assert response.status_code == 302
+    assert destination.field_mappings.get().target == "fields.canale"
     destination.refresh_from_db()
     assert destination.name == "Renamed"
     assert destination.secret == "keep-me"
@@ -273,8 +305,9 @@ def test_dashboard_shows_counts_and_page_health(admin_client):
     html = admin_client.get(reverse("admin:index")).content.decode()
     assert "Leads today" in html
     assert "Meta rejected the page token: x" in html
-    assert 'status__exact=unrouted">1</a>' in html
-    assert 'status__exact=failed">1</a>' in html
+    assert 'href="/admin/routing/"' in html  # unrouted leads are fixed in Routing
+    assert "?status__exact=failed" in html
+    assert html.count('<span class="lh-kpi-value">1</span>') == 2  # failed deliveries, unrouted
     assert "Not running" in html  # no heartbeat recorded in tests
 
 

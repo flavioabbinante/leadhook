@@ -1,0 +1,10 @@
+# Local development: PostgreSQL and Redis on this machine only, for `manage.py runserver`.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+#   DATABASE_URL=postgres://leadhook:leadhook@localhost:5432/leadhook
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"

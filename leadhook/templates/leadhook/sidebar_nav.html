@@ -1,0 +1,11 @@
+{% for section in sections %}
+  {% if section.heading %}<p class="lh-nav-heading">{{ section.heading }}</p>{% endif %}
+  <ul class="lh-nav">
+    {% for item in section.items %}
+      <li><a href="{{ item.url }}" class="lh-nav-link{% if item.active %} is-active{% endif %}"{% if item.active %} aria-current="page"{% endif %}>
+        <span class="lh-icon-chip"><svg aria-hidden="true"><use href="#lh-{{ item.icon }}"></use></svg></span>
+        {{ item.label }}
+      </a></li>
+    {% endfor %}
+  </ul>
+{% endfor %}

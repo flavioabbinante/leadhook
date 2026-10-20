@@ -1,0 +1,798 @@
+/* LeadHook admin theme: soft cards, orange accent, sidebar shell. Loaded after Django's CSS. */
+
+:root,
+html[data-theme="light"] {
+  --lh-orange: #f2692a;
+  --lh-orange-dark: #d9561a;
+  --lh-orange-soft: #fde9df;
+  --lh-ink: #1f2023;
+  --lh-ink-soft: #2b2c30;
+  --lh-text: #343a40;
+  --lh-muted: #7b8191;
+  --lh-line: #eceef1;
+  --lh-surface: #ffffff;
+  --lh-canvas: #f4f4f5;
+  --lh-track: #e9eaee;
+  --lh-blue: #2f8fd8;
+  --lh-green: #3fbf5a;
+  --lh-red: #e5484d;
+  --lh-amber: #e8a317;
+  --lh-shadow: 0 10px 30px rgba(17, 20, 28, 0.06), 0 2px 6px rgba(17, 20, 28, 0.04);
+  --lh-shadow-sm: 0 4px 12px rgba(17, 20, 28, 0.08);
+  --lh-radius: 16px;
+  --lh-radius-sm: 10px;
+
+  /* Django admin variables, re-pointed at the theme. */
+  --primary: var(--lh-orange);
+  --secondary: var(--lh-ink);
+  --accent: var(--lh-orange);
+  --primary-fg: #fff;
+  --body-fg: var(--lh-text);
+  --body-bg: var(--lh-canvas);
+  --body-quiet-color: var(--lh-muted);
+  --body-medium-color: var(--lh-text);
+  --body-loud-color: var(--lh-ink);
+  --header-color: var(--lh-ink);
+  --header-branding-color: var(--lh-ink);
+  --header-bg: transparent;
+  --header-link-color: var(--lh-ink);
+  --breadcrumbs-fg: var(--lh-muted);
+  --breadcrumbs-link-fg: var(--lh-muted);
+  --breadcrumbs-bg: transparent;
+  --link-fg: var(--lh-orange-dark);
+  --link-hover-color: var(--lh-ink);
+  --link-selected-fg: var(--lh-orange);
+  --hairline-color: var(--lh-line);
+  --border-color: #dfe1e6;
+  --darkened-bg: #f8f8fa;
+  --selected-bg: #fff4ee;
+  --selected-row: #fff4ee;
+  --button-fg: #fff;
+  --button-bg: var(--lh-ink);
+  --button-hover-bg: #000;
+  --default-button-bg: var(--lh-orange);
+  --default-button-hover-bg: var(--lh-orange-dark);
+  --close-button-bg: #8b909c;
+  --close-button-hover-bg: var(--lh-ink);
+  --object-tools-bg: var(--lh-ink);
+  --object-tools-hover-bg: var(--lh-orange);
+  --message-success-bg: #e8f7ec;
+  --message-warning-bg: #fff6e0;
+  --message-error-bg: #fdecec;
+  --font-family-primary: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --lh-ink: #f2f3f5;
+    --lh-ink-soft: #2a2b30;
+    --lh-text: #d6d8dd;
+    --lh-muted: #9298a6;
+    --lh-line: #2c2e34;
+    --lh-surface: #1c1d21;
+    --lh-canvas: #131417;
+    --lh-track: #2c2e34;
+    --lh-orange-soft: #3a2316;
+    --lh-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --lh-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --body-bg: var(--lh-canvas);
+    --button-bg: #33353b;
+    --button-hover-bg: #45474e;
+    --darkened-bg: #202126;
+    --selected-bg: #3a2316;
+    --selected-row: #3a2316;
+    --border-color: #3a3c43;
+    --message-success-bg: #18301f;
+    --message-warning-bg: #3a2f12;
+    --message-error-bg: #3a1a1b;
+  }
+}
+
+html[data-theme="dark"] {
+  --lh-ink: #f2f3f5;
+  --lh-ink-soft: #2a2b30;
+  --lh-text: #d6d8dd;
+  --lh-muted: #9298a6;
+  --lh-line: #2c2e34;
+  --lh-surface: #1c1d21;
+  --lh-canvas: #131417;
+  --lh-track: #2c2e34;
+  --lh-orange-soft: #3a2316;
+  --lh-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --lh-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --body-bg: var(--lh-canvas);
+  --button-bg: #33353b;
+  --button-hover-bg: #45474e;
+  --darkened-bg: #202126;
+  --selected-bg: #3a2316;
+  --selected-row: #3a2316;
+  --border-color: #3a3c43;
+  --message-success-bg: #18301f;
+  --message-warning-bg: #3a2f12;
+  --message-error-bg: #3a1a1b;
+}
+
+/* ---------- Base ---------- */
+
+html, body { background: var(--lh-canvas); }
+body { color: var(--lh-text); font-size: 14px; -webkit-font-smoothing: antialiased; }
+a:link, a:visited { color: var(--link-fg); }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--lh-orange);
+  outline-offset: 2px;
+}
+.base-svgs { display: none; }
+svg { width: 18px; height: 18px; }
+
+/* ---------- Shell ---------- */
+
+.lh-shell #container {
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  /* Django fixes #container at height: 100%, which caps the sticky sidebar at one screen. */
+  height: auto;
+  min-height: 100vh;
+  min-width: 0;
+}
+.lh-page { min-width: 0; display: flex; flex-direction: column; }
+.lh-shell .main { flex: 1; display: block; }
+.lh-shell #content { padding: 8px 32px 40px; }
+.lh-shell #content > h1 { display: none; }
+.lh-shell.dashboard #content { width: auto; }
+.lh-shell #footer { padding: 0; }
+
+.lh-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 18px 20px;
+  box-sizing: border-box;
+}
+.lh-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 18px;
+  border-bottom: 1px solid var(--lh-line);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--lh-ink) !important;
+  text-decoration: none !important;
+}
+.lh-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--lh-orange);
+  color: #fff;
+}
+.lh-sidebar-nav { flex: 1; }
+/* Still scrolls with the wheel or touchpad, but no visible scrollbar. */
+.lh-sidebar { scrollbar-width: none; }
+.lh-sidebar::-webkit-scrollbar { display: none; }
+.lh-nav-heading {
+  margin: 14px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lh-muted);
+}
+.lh-nav { list-style: none; margin: 0; padding: 0; }
+.lh-nav li { list-style: none; padding: 0; margin: 1px 0; }
+.lh-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  color: var(--lh-text) !important;
+  font-weight: 500;
+  text-decoration: none !important;
+  transition: background 0.15s ease;
+}
+.lh-nav-link:hover { background: var(--lh-surface); }
+.lh-nav-link.is-active {
+  background: var(--lh-surface);
+  box-shadow: var(--lh-shadow);
+  color: var(--lh-ink) !important;
+  font-weight: 600;
+}
+.lh-icon-chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--lh-surface);
+  box-shadow: var(--lh-shadow-sm);
+  color: var(--lh-ink);
+}
+.lh-icon-chip svg { width: 16px; height: 16px; }
+.lh-nav-link.is-active .lh-icon-chip, .lh-chip-orange { background: var(--lh-orange); color: #fff; }
+
+.lh-help-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: var(--lh-radius);
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(242, 105, 42, 0.45), transparent 60%),
+    linear-gradient(160deg, #2c2d33, #17181b);
+}
+.lh-help-card .lh-icon-chip { background: #fff; color: var(--lh-orange); margin-bottom: 10px; }
+.lh-help-card strong { font-size: 15px; }
+.lh-help-card span:not(.lh-icon-chip) { color: rgba(255, 255, 255, 0.75); font-size: 12px; margin-bottom: 10px; }
+
+/* ---------- Top bar ---------- */
+
+.lh-shell #header.lh-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 32px 18px;
+  background: transparent;
+  color: var(--lh-ink);
+  height: auto;
+  overflow: visible;
+}
+.lh-topbar-title { min-width: 0; }
+.lh-shell .breadcrumbs {
+  padding: 0;
+  background: none;
+  color: var(--lh-muted);
+  font-size: 13px;
+  border: 0;
+}
+.lh-shell .breadcrumbs a { color: var(--lh-muted) !important; }
+.lh-shell .breadcrumbs a:hover { color: var(--lh-ink) !important; }
+.lh-page-title { margin: 4px 0 0; font-size: 18px; font-weight: 700; color: var(--lh-ink); }
+.lh-topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--lh-text);
+}
+.lh-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--lh-radius-sm);
+  background: var(--lh-surface);
+  color: var(--lh-muted);
+}
+.lh-search svg { width: 16px; height: 16px; }
+.lh-search input {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  width: 170px;
+  color: var(--lh-text);
+  box-shadow: none !important;
+}
+.lh-search input:focus { outline: none; }
+.lh-topbar-link,
+#user-tools .lh-topbar-link,
+#logout-form button.lh-topbar-link {
+  color: var(--lh-text) !important;
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-transform: none;
+}
+.lh-topbar-link:hover { color: var(--lh-orange) !important; }
+#user-tools a.lh-btn { text-transform: none; letter-spacing: 0; border-bottom: 0; }
+#user-tools a.lh-btn-outline { border: 1px solid var(--lh-orange); }
+#user-tools a.lh-btn-outline:hover, #user-tools a.lh-btn-outline:focus { border-color: var(--lh-orange-dark); color: var(--lh-orange-dark) !important; }
+#user-tools .theme-toggle svg.theme-icon-when-auto,
+#user-tools .theme-toggle svg.theme-icon-when-dark,
+#user-tools .theme-toggle svg.theme-icon-when-light { fill: var(--lh-ink); color: var(--lh-canvas); }
+
+/* ---------- Buttons ---------- */
+
+.lh-btn,
+.lh-btn:link,
+.lh-btn:visited {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--lh-radius-sm);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.2;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+.lh-btn:active { transform: translateY(1px); }
+.lh-btn-primary { background: var(--lh-orange); color: #fff !important; box-shadow: 0 6px 16px rgba(242, 105, 42, 0.3); }
+.lh-btn-primary:hover { background: var(--lh-orange-dark); }
+.lh-btn-dark { background: #1f2023; color: #fff !important; }
+.lh-btn-dark:hover { background: #000; }
+.lh-btn-light { background: #fff; color: #1f2023 !important; }
+.lh-btn-outline { border-color: var(--lh-orange); color: var(--lh-orange) !important; background: transparent; }
+.lh-btn-outline:hover { background: var(--lh-orange-soft); }
+.lh-btn-block { width: 100%; box-sizing: border-box; }
+
+.button, input[type=submit], input[type=button], .submit-row input, a.button {
+  border-radius: var(--lh-radius-sm);
+  padding: 10px 16px;
+  font-weight: 700;
+}
+.button.default, input[type=submit].default, .submit-row input.default {
+  background: var(--lh-orange);
+  box-shadow: 0 6px 16px rgba(242, 105, 42, 0.25);
+}
+/* Django pulls object-tools up by -48px into the header; keep them in the content flow instead. */
+.lh-shell .object-tools { float: none; margin: 0 0 16px; display: flex; justify-content: flex-end; gap: 8px; }
+.lh-shell .object-tools li { float: none; height: auto; margin: 0; }
+.object-tools a:link, .object-tools a:visited {
+  float: none; border-radius: 999px; padding: 8px 16px; font-size: 12px;
+  background: var(--lh-orange); color: #fff; text-transform: none; letter-spacing: 0;
+}
+/* Link-buttons such as "Reset password" otherwise inherit the orange link colour. */
+.lh-shell a.button:link, .lh-shell a.button:visited { color: var(--button-fg); }
+.object-tools a:focus, .object-tools a:hover { background: var(--lh-orange-dark); color: #fff; }
+
+/* ---------- Cards and stock admin modules ---------- */
+
+.lh-card,
+.lh-shell .module,
+.lh-shell #changelist .changelist-form-container,
+.lh-shell #changelist-filter,
+.lh-shell .submit-row,
+.lh-shell .inline-group {
+  background: var(--lh-surface);
+  border: 0;
+  border-radius: var(--lh-radius);
+  box-shadow: var(--lh-shadow);
+}
+.lh-shell .module { overflow: hidden; margin-bottom: 24px; }
+.lh-shell .module h2,
+.lh-shell .module caption,
+.lh-shell .inline-group h2 {
+  background: transparent;
+  color: var(--lh-ink);
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 18px 20px 10px;
+  text-align: left;
+}
+.lh-shell fieldset.module { padding: 0 0 8px; }
+.lh-shell .form-row { padding: 12px 20px; border-bottom: 1px solid var(--lh-line); }
+.lh-shell .submit-row { padding: 14px 20px; margin: 20px 0; }
+.lh-shell .inline-group { overflow: hidden; }
+/* Tabular inlines repeat each row's name above its first input; the input already shows it. */
+.lh-shell .inline-group td.original p { display: none; }
+.lh-shell .inline-group tr.has_original td { padding-top: 8px; }
+
+.lh-shell input[type=text], .lh-shell input[type=password], .lh-shell input[type=email],
+.lh-shell input[type=url], .lh-shell input[type=number], .lh-shell input[type=search],
+.lh-shell input[type=tel], .lh-shell textarea, .lh-shell select, .lh-shell .vTextField {
+  border: 1px solid var(--border-color);
+  border-radius: var(--lh-radius-sm);
+  padding: 8px 12px;
+  background: var(--lh-surface);
+  color: var(--lh-text);
+}
+.lh-shell select { padding: 7px 10px; height: auto; }
+
+.lh-shell thead th,
+.lh-shell tfoot td,
+.lh-shell #changelist table thead th {
+  background: transparent;
+  color: var(--lh-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--lh-line);
+  white-space: nowrap;
+}
+.lh-shell td, .lh-shell th { border-bottom-color: var(--lh-line); vertical-align: middle; }
+.lh-shell tr:nth-child(even), .lh-shell .row2 { background: transparent; }
+.lh-shell tbody tr:hover { background: var(--darkened-bg); }
+
+/* Change list */
+.lh-shell #changelist { gap: 24px; }
+.lh-shell #changelist .changelist-form-container { overflow: hidden; }
+.lh-shell #changelist #toolbar {
+  background: transparent;
+  border: 0;
+  padding: 16px 20px 6px;
+  margin: 0;
+}
+.lh-shell #changelist #toolbar form input[type=text] { border-radius: var(--lh-radius-sm); }
+.lh-shell #changelist .actions {
+  background: transparent;
+  border: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--lh-line);
+}
+.lh-shell #changelist .paginator {
+  background: transparent;
+  border: 0;
+  padding: 14px 20px;
+  color: var(--lh-muted);
+}
+.lh-shell #changelist table { width: 100%; }
+.lh-shell #changelist table tbody td, .lh-shell #changelist table tbody th { padding: 12px 10px; }
+.lh-shell #changelist table thead th:first-child, .lh-shell #changelist table tbody td:first-child { padding-left: 20px; }
+.lh-shell #changelist-filter { overflow: hidden; }
+.lh-shell #changelist-filter h2 {
+  background: transparent;
+  color: var(--lh-ink);
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: none;
+  padding: 18px 18px 6px;
+}
+.lh-shell #changelist-filter h3 { color: var(--lh-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.lh-shell #changelist-filter li.selected a { color: var(--lh-orange) !important; font-weight: 700; }
+.lh-shell #changelist-filter a:focus, .lh-shell #changelist-filter a:hover { color: var(--lh-ink) !important; }
+
+/* Messages */
+.lh-shell ul.messagelist { margin: 0 32px 16px; }
+ul.messagelist li {
+  border-radius: var(--lh-radius-sm);
+  padding: 12px 16px 12px 44px;
+  background-position: 16px 13px;
+  margin-bottom: 8px;
+  color: var(--lh-text);
+  box-shadow: var(--lh-shadow-sm);
+}
+/* Django's warning and error rules reset the icon position with their own shorthand. */
+ul.messagelist li.warning, ul.messagelist li.error { background-position: 16px 13px; }
+.errornote { border-radius: var(--lh-radius-sm); }
+
+/* ---------- Dashboard ---------- */
+
+.lh-grid { display: grid; gap: 24px; margin-bottom: 24px; }
+.lh-grid-top { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.lh-grid-bottom { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); align-items: start; }
+.lh-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+
+.lh-kpi,
+.lh-kpi:link,
+.lh-kpi:visited {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 150px;
+  padding: 20px;
+  box-sizing: border-box;
+  border-radius: var(--lh-radius);
+  background: #1f2023;
+  color: #fff !important;
+  text-decoration: none;
+  box-shadow: var(--lh-shadow);
+  transition: transform 0.15s ease;
+}
+a.lh-kpi:hover { transform: translateY(-2px); }
+.lh-kpi-orange { background: linear-gradient(135deg, #f47a35, var(--lh-orange)); box-shadow: 0 12px 28px rgba(242, 105, 42, 0.32); }
+.lh-kpi-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #fff;
+  color: #1f2023;
+  margin-bottom: auto;
+}
+.lh-kpi-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lh-kpi-value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.lh-kpi-trend { font-size: 13px; font-weight: 700; }
+.lh-kpi-label { font-size: 14px; color: rgba(255, 255, 255, 0.85); }
+
+.lh-card { padding: 22px 24px; box-sizing: border-box; min-width: 0; }
+.lh-card-flush { padding: 0; overflow: hidden; }
+.lh-card-head { padding: 22px 24px 8px; }
+.lh-card-head-split { border-top: 1px solid var(--lh-line); margin-top: 8px; }
+.lh-card-title { margin: 0; padding: 0; font-size: 17px; font-weight: 700; color: var(--lh-ink); background: none; text-transform: none; letter-spacing: 0; }
+.lh-card-subtitle { margin: 6px 0 14px; color: var(--lh-muted); font-size: 13px; }
+.lh-card-subtitle strong { color: var(--lh-text); }
+.lh-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 26px; flex-wrap: wrap; }
+.lh-muted { color: var(--lh-muted); margin: 0; font-size: 13px; line-height: 1.6; }
+.lh-muted strong { color: var(--lh-ink); }
+
+.lh-meter { margin-top: 16px; }
+.lh-meter-head { display: flex; justify-content: space-between; font-weight: 600; color: var(--lh-ink); margin-bottom: 8px; font-size: 14px; }
+.lh-meter-head span:last-child { color: var(--lh-muted); font-weight: 500; }
+.lh-bar { height: 4px; border-radius: 999px; background: var(--lh-track); overflow: hidden; }
+.lh-bar-thin { height: 4px; }
+.lh-bar-fill { display: block; height: 100%; border-radius: inherit; }
+.lh-fill-orange { background: var(--lh-orange); }
+.lh-fill-blue { background: var(--lh-blue); }
+.lh-fill-green { background: var(--lh-green); }
+
+.lh-status { font-weight: 700; }
+.lh-status-ok { color: var(--lh-green); }
+.lh-status-bad { color: var(--lh-red); }
+
+.lh-table { width: 100%; border-collapse: collapse; }
+.lh-table th, .lh-table td { padding: 14px 24px; border-bottom: 1px solid var(--lh-line); text-align: left; font-size: 13px; }
+.lh-table tbody tr:last-child td { border-bottom: 0; }
+.lh-table .lh-num { text-align: right; width: 70px; }
+.lh-table .lh-col-bar { width: 26%; }
+.lh-row-title { display: flex; align-items: center; gap: 12px; color: var(--lh-ink) !important; font-weight: 600; text-decoration: none; }
+.lh-row-title small { display: block; color: var(--lh-muted); font-weight: 500; font-size: 12px; }
+.lh-row-strong { color: var(--lh-ink); font-weight: 600; }
+.lh-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--lh-orange-soft);
+  color: var(--lh-orange-dark);
+  font-weight: 700;
+}
+.lh-bar-label { display: block; font-size: 12px; font-weight: 600; color: var(--lh-blue); margin-bottom: 6px; }
+.lh-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+.lh-badge-success { background: rgba(63, 191, 90, 0.14); color: #23893a; }
+.lh-badge-warning { background: rgba(232, 163, 23, 0.16); color: #9a6a07; }
+.lh-badge-danger { background: rgba(229, 72, 77, 0.13); color: #c4282d; }
+.lh-error-text { display: block; margin-top: 4px; color: var(--lh-muted); font-size: 12px; }
+.lh-empty { color: var(--lh-muted); text-align: center; padding: 28px 24px !important; }
+
+.lh-timeline { list-style: none; margin: 18px 0 0; padding: 0; position: relative; }
+.lh-timeline::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--lh-line); }
+.lh-timeline-item { position: relative; list-style: none; padding: 0 0 20px 32px; }
+.lh-timeline-item:last-child { padding-bottom: 0; }
+.lh-timeline-item a { color: var(--lh-ink) !important; text-decoration: none; font-size: 14px; }
+.lh-timeline-item a:hover strong { color: var(--lh-orange); }
+.lh-timeline-item small { display: block; margin-top: 3px; color: var(--lh-muted); font-size: 12px; font-weight: 600; }
+.lh-timeline-dot {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--lh-surface);
+  border: 4px solid var(--lh-blue);
+  box-sizing: border-box;
+}
+.lh-tone-delivered .lh-timeline-dot { border-color: var(--lh-green); }
+.lh-tone-failed .lh-timeline-dot, .lh-tone-partially_failed .lh-timeline-dot { border-color: var(--lh-red); }
+.lh-tone-unrouted .lh-timeline-dot { border-color: var(--lh-amber); }
+.lh-tone-routed .lh-timeline-dot, .lh-tone-fetched .lh-timeline-dot { border-color: var(--lh-orange); }
+
+.lh-callout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  border-radius: var(--lh-radius);
+  background: var(--lh-orange-soft);
+  color: var(--lh-ink);
+}
+.lh-callout div { flex: 1; }
+
+/* ---------- Setup wizard ---------- */
+
+.lh-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; max-width: 900px; }
+.lh-step { list-style: none; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 18px; padding: 22px 24px; }
+.lh-step-number {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--lh-track);
+  color: var(--lh-ink);
+  font-weight: 700;
+}
+.lh-step.is-done .lh-step-number { background: var(--lh-orange); color: #fff; }
+.lh-step h2 { margin: 2px 0 6px; padding: 0; font-size: 16px; color: var(--lh-ink); background: none; text-transform: none; letter-spacing: 0; }
+.lh-step p { margin: 0 0 12px; color: var(--lh-text); line-height: 1.6; }
+.lh-step form { margin: 0; }
+.lh-step .lh-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.lh-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; margin: 0 0 14px; align-items: center; }
+.lh-kv dt { color: var(--lh-muted); font-weight: 600; font-size: 13px; }
+.lh-kv dd { margin: 0; }
+.lh-kv code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--darkened-bg);
+  border: 1px solid var(--lh-line);
+  font-size: 12px;
+}
+.lh-page-choice { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--lh-line); }
+
+/* ---------- Login ---------- */
+
+body.login { background: var(--lh-canvas); }
+.login #container {
+  width: min(420px, calc(100% - 32px));
+  margin: 10vh auto 0;
+  border-radius: var(--lh-radius);
+  background: var(--lh-surface);
+  box-shadow: var(--lh-shadow);
+  overflow: hidden;
+  border: 0;
+}
+.login .lh-page { display: block; }
+.login #header { background: transparent; padding: 28px 28px 0; justify-content: center; }
+.login #header .breadcrumbs { display: none; }
+.login #branding { margin: 0; }
+.login #branding .lh-brand { border: 0; padding: 0; justify-content: center; font-size: 20px; }
+.login #content { padding: 18px 28px 28px; }
+.login .submit-row { padding: 12px 0 0; margin: 0; background: none; box-shadow: none; }
+.login .submit-row input { width: 100%; background: var(--lh-orange); }
+.login .form-row { padding: 6px 0; border: 0; }
+.login .form-row input { width: 100%; box-sizing: border-box; border-radius: var(--lh-radius-sm); padding: 10px 12px; }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1100px) {
+  .lh-grid-top, .lh-grid-bottom { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+  .lh-shell #container { grid-template-columns: minmax(0, 1fr); }
+  .lh-sidebar { position: static; height: auto; }
+  .lh-sidebar-nav .lh-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+  .lh-help-card { display: none; }
+  .lh-shell #header.lh-topbar { flex-direction: column; align-items: stretch; padding: 16px; }
+  .lh-topbar-tools { flex-wrap: wrap; }
+  .lh-search input { width: 100%; }
+  .lh-shell #content { padding: 8px 16px 32px; }
+  .lh-kpis { grid-template-columns: minmax(0, 1fr); }
+  .lh-shell ul.messagelist { margin: 0 16px 16px; }
+}
+
+/* Dashboard tables are plain: no Django zebra striping or header fill. */
+.lh-table thead th, .lh-table tbody tr, .lh-table tbody tr:nth-child(odd), .lh-table tbody tr:nth-child(even) { background: transparent; }
+.lh-table tbody tr:hover { background: var(--darkened-bg); }
+
+/* The change list wrapper carries the "module" class; its two inner panels are the cards. */
+.lh-shell #changelist.module { background: transparent; box-shadow: none; overflow: visible; }
+.lh-shell #changelist #toolbar #searchbar { height: 38px; min-width: 260px; }
+.lh-shell #changelist #toolbar input[type=submit] { padding: 9px 16px; }
+
+.submit-row input, .submit-row a, .object-tools a { text-transform: none; letter-spacing: 0; }
+.lh-shell .readonly pre, .lh-shell pre {
+  background: var(--darkened-bg);
+  border: 1px solid var(--lh-line);
+  border-radius: var(--lh-radius-sm);
+  padding: 14px 16px;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
+.lh-btn-outline:link, .lh-btn-outline:visited { border-color: var(--lh-orange); }
+
+/* Dark theme: dark cards need their own tone to stand off the dark canvas. */
+html[data-theme="dark"] .lh-kpi:not(.lh-kpi-orange),
+html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3a3c43; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lh-kpi:not(.lh-kpi-orange),
+  :root:not([data-theme="light"]) .lh-btn-dark { background: #2a2b31; border: 1px solid #3a3c43; }
+}
+
+/* ---------- Centered page width ---------- */
+
+.lh-shell #header.lh-topbar,
+.lh-shell .main,
+.lh-shell ul.messagelist {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.lh-shell ul.messagelist { padding: 0 32px; }
+.lh-shell ul.messagelist li { margin-left: 0; margin-right: 0; }
+.lh-narrow { max-width: 1080px; margin: 0 auto; }
+.lh-narrow .lh-card, .lh-narrow .lh-callout { margin-bottom: 24px; }
+
+/* ---------- Stock form fixes ---------- */
+
+.lh-shell .submit-row input[type=submit], .lh-shell input[type=submit].default { text-transform: none; }
+.lh-shell .selector-chosen-title, .lh-shell .selector-chosen h2 {
+  background: var(--lh-orange-soft) !important;
+  color: var(--lh-ink) !important;
+}
+.lh-shell .selector-available-title, .lh-shell .selector-available h2 {
+  background: var(--darkened-bg) !important;
+  color: var(--lh-ink) !important;
+}
+
+/* ---------- Routing ---------- */
+
+.lh-btn-sm, .lh-btn-sm:link, .lh-btn-sm:visited { padding: 6px 12px; font-size: 12px; }
+.lh-card-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.lh-connect { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.lh-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; min-width: 0; }
+.lh-field span { font-size: 12px; font-weight: 700; color: var(--lh-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.lh-field select { width: 100%; height: 42px; }
+.lh-connect-arrow { font-size: 22px; color: var(--lh-orange); padding-bottom: 8px; }
+.lh-connect .lh-btn { height: 42px; }
+.lh-hint { margin-top: 14px; }
+.lh-callout-quiet { background: var(--lh-surface); box-shadow: var(--lh-shadow); }
+.lh-routing td { vertical-align: middle; }
+.lh-routing-page td { background: var(--darkened-bg); }
+.lh-routing-form td:first-child { padding-left: 68px; }
+.lh-form-name { color: var(--lh-ink); font-weight: 600; }
+.lh-form-name small { display: block; color: var(--lh-muted); font-weight: 500; font-size: 12px; }
+.lh-pills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lh-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 6px 5px 12px;
+  border-radius: 999px;
+  background: var(--lh-orange-soft);
+  color: var(--lh-ink);
+  font-weight: 600;
+  font-size: 12px;
+}
+.lh-pill a { color: var(--lh-ink) !important; text-decoration: none; }
+.lh-pill small { color: var(--lh-muted); font-weight: 600; }
+.lh-pill button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--lh-ink);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lh-pill button:hover { background: var(--lh-red); color: #fff; }
+.lh-pill.is-paused { background: var(--lh-track); }
+.lh-pill.is-inherited { background: transparent; border: 1px dashed var(--border-color); padding-right: 12px; color: var(--lh-muted); }
+.lh-waiting { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.lh-narrow .lh-steps .lh-card { margin-bottom: 0; }
+
+/* On short screens the help card would push the nav into a scrolling sidebar. */
+@media (max-height: 900px) {
+  .lh-help-card { display: none; }
+  .lh-nav-link { padding-top: 4px; padding-bottom: 4px; }
+}
+
+/* Collapsible manual fallback inside a setup step. */
+.lh-details { margin-top: 14px; }
+.lh-details summary { cursor: pointer; color: var(--lh-muted); font-weight: 600; font-size: 13px; }
+.lh-details[open] summary { margin-bottom: 10px; }
