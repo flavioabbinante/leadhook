@@ -209,7 +209,7 @@ def parse_retry_after(value: str | None) -> int | None:
 
 def send_request(destination: Destination, body: str, headers: dict) -> SendResult:
     try:
-        check_destination_url(destination.url)
+        check_destination_url(destination.endpoint_url())
     except BlockedDestination as exc:
         return SendResult("fail", error=str(exc))
     except OSError as exc:
@@ -225,7 +225,7 @@ def send_request(destination: Destination, body: str, headers: dict) -> SendResu
                 session.mount("https://", GuardedAdapter())
             with session.request(
                 destination.method,
-                destination.url,
+                destination.endpoint_url(),
                 data=body.encode("utf-8"),
                 headers=headers,
                 timeout=destination.timeout_s,
@@ -237,7 +237,7 @@ def send_request(destination: Destination, body: str, headers: dict) -> SendResu
         return SendResult("fail", error=str(exc))
     except requests.RequestException as exc:
         return SendResult(
-            "retry", error=redact_url(f"{type(exc).__name__}: {exc}", destination.url)
+            "retry", error=redact_url(f"{type(exc).__name__}: {exc}", destination.endpoint_url())
         )
 
     status = response.status_code

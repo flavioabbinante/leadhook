@@ -2,8 +2,10 @@ import json
 from datetime import UTC, datetime
 
 from leadhook.leads.models import Lead
+from leadhook.meta.models import Form
 
 from .models import Delivery, Destination, FieldMapping
+from .telegram import TEXT_LIMIT, render_markdown
 from .templating import TemplateError, _first_word, _phone_strip_prefix, _rest_words, render_payload
 
 PAYLOAD_VERSION = 1
@@ -46,12 +48,33 @@ def build_context(lead: Lead, delivery: Delivery, *, attempt: int, sent_at: date
 
 
 def render_body(destination: Destination, context: dict) -> str:
+    if destination.is_telegram:
+        message = {"chat_id": destination.telegram_chat_id}
+        if destination.message_template.strip():
+            message["text"] = render_markdown(destination.message_template, context)
+            message["parse_mode"] = "HTML"
+        else:
+            message["text"] = telegram_text(context)
+        return json.dumps(message, ensure_ascii=False)
     if destination.payload_template.strip():
         return render_payload(destination.payload_template, context)
     mappings = list(destination.field_mappings.all())
     if mappings:
         return json.dumps(build_mapped_body(mappings, context), ensure_ascii=False)
     return json.dumps(context, ensure_ascii=False)
+
+
+def telegram_text(context: dict) -> str:
+    """Plain-text message: the form, each answer under its question label, the campaign."""
+    form = Form.objects.filter(form_id=context["form"]["id"]).only("questions").first()
+    labels = {q["key"]: q["label"] for q in form.questions} if form else {}
+    lines = [f"New lead · {context['form']['name'] or 'Meta form'}", ""]
+    for key, value in context["data"].items():
+        shown = ", ".join(map(str, value)) if isinstance(value, list) else value
+        lines.append(f"{labels.get(key, key)}: {shown}")
+    if context["campaign"]["name"]:
+        lines += ["", f"Campaign: {context['campaign']['name']}"]
+    return "\n".join(lines)[:TEXT_LIMIT]
 
 
 TRANSFORMS = {

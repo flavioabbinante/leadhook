@@ -117,3 +117,20 @@ def test_destination_timeout_must_be_between_1_and_120(timeout):
     with pytest.raises(ValidationError) as excinfo:
         destination.full_clean()
     assert "timeout_s" in excinfo.value.message_dict
+
+
+def test_telegram_destination_needs_token_and_chat_id():
+    destination = make_destination(kind=Destination.Kind.TELEGRAM, url="", secret="bad/../x")
+    with pytest.raises(ValidationError) as exc:
+        destination.clean()
+    assert set(exc.value.message_dict) == {"secret", "telegram_chat_id"}
+    destination.secret, destination.telegram_chat_id = "123:abc", "-1001234567890"
+    destination.auth_type = Destination.AuthType.BEARER
+    destination.clean()
+    assert destination.auth_type == Destination.AuthType.NONE
+
+
+def test_webhook_destination_needs_url():
+    with pytest.raises(ValidationError) as exc:
+        make_destination(url="").clean()
+    assert "url" in exc.value.message_dict
