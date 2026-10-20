@@ -29,7 +29,7 @@ def _relation(source: Page | Form):
 
 
 def _describe(source: Page | Form) -> str:
-    return f"di tutti i moduli di {source}" if isinstance(source, Page) else f"del modulo {source}"
+    return f"di tutti i form di {source}" if isinstance(source, Page) else f"del form {source}"
 
 
 def _unrouted(source: Page | Form):
@@ -85,7 +85,7 @@ def routing_view(request):
             )
     context = {
         **site.each_context(request),
-        "title": "Instradamento",
+        "title": "Routing",
         "rows": rows,
         "pages": pages,
         "destinations": destinations,
@@ -107,9 +107,7 @@ def _handle(request) -> None:
         for pk in leads:
             route_lead.delay(pk)
         page = source.page if isinstance(source, Form) else source
-        messages.success(
-            request, f"{len(leads)} lead in attesa di {page} inviati all'instradamento."
-        )
+        messages.success(request, f"{len(leads)} lead in attesa di {page} inviati al routing.")
         return
     destination = Destination.objects.filter(pk=request.POST.get("destination") or 0).first()
     if destination is None:

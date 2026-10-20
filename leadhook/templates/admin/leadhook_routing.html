@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Pagina iniziale</a> › Instradamento</div>{% endblock %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Pagina iniziale</a> › Routing</div>{% endblock %}
 {% block content %}
 <div id="content-main" class="lh-narrow">
 
@@ -19,7 +19,7 @@
           <select name="source" required>
             {% for page in pages %}
               <optgroup label="{{ page }}">
-                <option value="page:{{ page.pk }}">Tutti i moduli di {{ page.name|default:page.page_id }} (predefinito della pagina)</option>
+                <option value="page:{{ page.pk }}">Tutti i form di {{ page.name|default:page.page_id }} (predefinito della pagina)</option>
                 {% for form in page.forms.all %}
                   <option value="form:{{ form.pk }}">{{ form.name|default:form.form_id }}</option>
                 {% endfor %}
@@ -44,8 +44,8 @@
 
   <div class="lh-callout lh-callout-quiet">
     <span class="lh-icon-chip"><svg aria-hidden="true"><use href="#lh-shuffle"></use></svg></span>
-    <div><strong>Come funziona l'instradamento.</strong> Un modulo con destinazioni proprie invia solo a quelle.
-      Tutti gli altri moduli della pagina usano il <em>predefinito della pagina</em>. Un lead senza destinazione resta
+    <div><strong>Come funziona il routing.</strong> Un form con destinazioni proprie invia solo a quelle.
+      Tutti gli altri form della pagina usano il <em>predefinito della pagina</em>. Un lead senza destinazione resta
       <em>non instradato</em> finché non lo colleghi.</div>
   </div>
 

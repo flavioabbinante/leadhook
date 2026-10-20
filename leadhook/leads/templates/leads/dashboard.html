@@ -24,7 +24,7 @@
       <div class="lh-kpi-row"><span class="lh-kpi-value">{{ failed_deliveries }}</span></div>
       <span class="lh-kpi-label">Consegne fallite</span>
     </a>
-    <a class="lh-kpi" href="{% url 'routing' %}" title="Collegali in Instradamento">
+    <a class="lh-kpi" href="{% url 'routing' %}" title="Collegali in Routing">
       <span class="lh-kpi-icon"><svg aria-hidden="true"><use href="#lh-shuffle"></use></svg></span>
       <div class="lh-kpi-row"><span class="lh-kpi-value">{{ unrouted_leads }}</span></div>
       <span class="lh-kpi-label">Lead non instradati</span>
@@ -66,7 +66,7 @@
           <h2 class="lh-card-title">Pagine</h2>
           <p class="lh-card-subtitle"><strong>{{ pages|length }}</strong> collegat{{ pages|length|pluralize:"a,e" }} · lead negli ultimi 7 giorni</p>
         </div>
-        <a class="lh-btn lh-btn-outline" href="{% url 'routing' %}">Gestisci l'instradamento</a>
+        <a class="lh-btn lh-btn-outline" href="{% url 'routing' %}">Gestisci il routing</a>
       </div>
     </div>
     <table class="lh-table">
@@ -99,11 +99,11 @@
     </table>
 
     <div class="lh-card-head lh-card-head-split">
-      <h2 class="lh-card-title">Lead per modulo</h2>
+      <h2 class="lh-card-title">Lead per form</h2>
       <p class="lh-card-subtitle">Ultimi 7 giorni</p>
     </div>
     <table class="lh-table">
-      <thead><tr><th scope="col">Modulo</th><th scope="col" class="lh-num">Oggi</th><th scope="col" class="lh-num">7 giorni</th><th scope="col" class="lh-col-bar">Quota</th></tr></thead>
+      <thead><tr><th scope="col">Form</th><th scope="col" class="lh-num">Oggi</th><th scope="col" class="lh-num">7 giorni</th><th scope="col" class="lh-col-bar">Quota</th></tr></thead>
       <tbody>
       {% for row in forms %}
         <tr>
@@ -127,7 +127,7 @@
         <li class="lh-timeline-item lh-tone-{{ lead.status }}">
           <span class="lh-timeline-dot"></span>
           <a href="{% url 'admin:leads_lead_change' lead.pk %}">
-            <strong>{{ lead.get_status_display }}</strong> · {{ lead.form.name|default:lead.form_external_id|default:"Modulo sconosciuto" }}
+            <strong>{{ lead.get_status_display }}</strong> · {{ lead.form.name|default:lead.form_external_id|default:"Form sconosciuto" }}
           </a>
           <small>{{ lead.received_at|date:"j M H:i" }} · {{ lead.leadgen_id }}</small>
         </li>

@@ -18,7 +18,7 @@ def _offer_unrouted_leads(modeladmin, request, leads, lead_filter: str) -> None:
     modeladmin.message_user(
         request,
         format_html(
-            '{} lead senza instradamento ora possono essere consegnati: <a href="{}">selezionali '
+            '{} lead senza routing ora possono essere consegnati: <a href="{}">selezionali '
             "ed esegui "
             "“Rielabora i lead selezionati”</a>.",
             count,

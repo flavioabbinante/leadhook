@@ -67,7 +67,7 @@
           <button class="lh-btn lh-btn-primary" type="submit" name="action" value="connect_pages">Collega le pagine selezionate</button>
         </form>
       {% else %}
-        <p>Collegare una pagina la iscrive agli eventi dei lead e ne carica i moduli.</p>
+        <p>Collegare una pagina la iscrive agli eventi dei lead e ne carica i form.</p>
         <form method="post">{% csrf_token %}<button class="lh-btn lh-btn-dark" type="submit" name="action" value="load_pages">Carica le pagine</button></form>
       {% endif %}
     </div>
@@ -76,10 +76,10 @@
     <span class="lh-step-number">{% if has_destination %}<svg aria-hidden="true"><use href="#lh-check"></use></svg>{% else %}4{% endif %}</span>
     <div>
       <h2>Destinazione</h2>
-      <p>Crea una destinazione (per esempio il tuo webhook n8n), poi collegala a una pagina o a un modulo in Instradamento.</p>
+      <p>Crea una destinazione (per esempio il tuo webhook n8n), poi collegala a una pagina o a un form in Routing.</p>
       <div class="lh-actions">
         <a class="lh-btn lh-btn-primary" href="{% url 'admin:destinations_destination_add' %}">Aggiungi una destinazione</a>
-        <a class="lh-btn lh-btn-outline" href="{% url 'routing' %}">Collegala in Instradamento</a>
+        <a class="lh-btn lh-btn-outline" href="{% url 'routing' %}">Collegala in Routing</a>
       </div>
     </div>
   </li>
@@ -88,9 +88,9 @@
     <div>
       <h2>Lead di prova</h2>
       {% if forms %}
-        <p>Meta crea un lead di prova sul modulo e invia il webhook, così attraversa tutta la pipeline.</p>
+        <p>Meta crea un lead di prova sul form e invia il webhook, così attraversa tutta la pipeline.</p>
         <form method="post" class="lh-actions">{% csrf_token %}
-          <label for="form_id" class="lh-muted">Modulo</label>
+          <label for="form_id" class="lh-muted">Form</label>
           <select name="form_id" id="form_id">
             {% for form in forms %}<option value="{{ form.form_id }}">{{ form.page.name }} — {{ form }}</option>{% endfor %}
           </select>
