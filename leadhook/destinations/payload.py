@@ -68,7 +68,7 @@ def telegram_text(context: dict) -> str:
     """Plain-text message: the form, each answer under its question label, the campaign."""
     form = Form.objects.filter(form_id=context["form"]["id"]).only("questions").first()
     labels = {q["key"]: q["label"] for q in form.questions} if form else {}
-    lines = [f"Nuovo lead · {context['form']['name'] or 'Modulo Meta'}", ""]
+    lines = [f"Nuovo lead · {context['form']['name'] or 'Form Meta'}", ""]
     for key, value in context["data"].items():
         shown = ", ".join(map(str, value)) if isinstance(value, list) else value
         lines.append(f"{labels.get(key, key)}: {shown}")

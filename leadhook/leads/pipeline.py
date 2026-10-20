@@ -35,7 +35,7 @@ def lead_pipeline(lead: Lead) -> tuple[list[Step], list[Step]]:
     status = lead.status
     form = lead.form.name if lead.form else lead.form_external_id
     # Meta's created_time is when the person sent the form, before the webhook reached us.
-    submitted = Step("Modulo inviato", "list", "done", form, _when(lead.created_time))
+    submitted = Step("Form inviato", "list", "done", form, _when(lead.created_time))
     received = Step(
         lead.get_source_display(), "zap", "done", "Lead ricevuto", _when(lead.received_at)
     )
@@ -48,13 +48,11 @@ def lead_pipeline(lead: Lead) -> tuple[list[Step], list[Step]]:
 
     deliveries = list(lead.deliveries.select_related("destination").order_by("id"))
     if status in (Lead.Status.RECEIVED, Lead.Status.FETCHED):
-        routing = Step("Instradamento", "shuffle", "pending", "In attesa")
+        routing = Step("Routing", "shuffle", "pending", "In attesa")
     elif status == Lead.Status.UNROUTED:
-        routing = Step(
-            "Instradamento", "shuffle", "error", "Nessuna destinazione attiva per questo modulo"
-        )
+        routing = Step("Routing", "shuffle", "error", "Nessuna destinazione attiva per questo form")
     else:
-        routing = Step("Instradamento", "shuffle", "done", f"Destinazioni: {len(deliveries)}")
+        routing = Step("Routing", "shuffle", "done", f"Destinazioni: {len(deliveries)}")
 
     branches = []
     for delivery in deliveries:

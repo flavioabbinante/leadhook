@@ -2,9 +2,9 @@
 
 # 🪝 LeadHook
 
-**Every Facebook & Instagram lead, delivered to the right webhook — from all your pages, through one Meta app.**
+**Ogni lead di Facebook e Instagram, consegnato al webhook giusto: da tutte le tue pagine, con una sola app Meta.**
 
-Self-hosted · open source · built for n8n, Make, Zapier and any CRM with an API.
+Self-hosted · open source · pensato per n8n, Make, Zapier e qualsiasi CRM con un'API.
 
 [![CI](https://github.com/flavioabbinante/leadhook/actions/workflows/ci.yml/badge.svg)](https://github.com/flavioabbinante/leadhook/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
@@ -21,50 +21,50 @@ Self-hosted · open source · built for n8n, Make, Zapier and any CRM with an AP
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Works with n8n](https://img.shields.io/badge/works_with-n8n-EA4B71?logo=n8n&logoColor=white)](https://github.com/n8n-io/n8n)
 
-[Quick start](#-quick-start) ·
-[How it works](#-how-it-works) ·
-[Meta setup](#-meta-app-setup) ·
+[Avvio rapido](#-avvio-rapido) ·
+[Come funziona](#-come-funziona) ·
+[Configurazione Meta](#-configurazione-dellapp-meta) ·
 [Payload](#-payload) ·
-[Configuration](#-configuration) ·
-[Contributing](CONTRIBUTING.md)
+[Configurazione](#-configurazione) ·
+[Contribuire](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## ✨ Why LeadHook?
+## ✨ Perché LeadHook?
 
-n8n's Facebook Lead Ads trigger holds **one subscription per Meta app**. Run several pages or campaigns and they fight over the same callback URL; route by hard-coded form IDs and every new campaign means editing a workflow.
+Il trigger Facebook Lead Ads di n8n gestisce **una sola iscrizione per app Meta**. Se hai più pagine o campagne, si contendono lo stesso URL di callback; se instradi in base a ID di form scritti a mano, ogni nuova campagna ti costringe a modificare un workflow.
 
-LeadHook owns that callback. It receives leads from **every page and form**, fetches the full answers from the Graph API, and forwards each one to the destination you picked for its form — or the page default — with retries, signatures and an audit trail.
+LeadHook si prende quel callback. Riceve i lead da **ogni pagina e ogni form**, recupera le risposte complete dalla Graph API e inoltra ciascun lead alla destinazione che hai scelto per il suo form, oppure a quella predefinita della pagina, con nuovi tentativi, firme e uno storico verificabile.
 
 | | |
 |---|---|
-| 🔀 **One app, unlimited pages** | Route by form, fall back to a default per page. Leads with no route are kept as *unrouted*, never lost. |
-| 🧩 **Drop-in for n8n** | The standard payload matches n8n's Facebook Lead Ads trigger. Need something else? Write it with sandboxed Jinja2 templates. |
-| 🔁 **Delivered, exactly once per destination** | 7 attempts over ~1.5 days with backoff and `Retry-After`, `Idempotency-Key` on every request, one-click resend. |
-| 🛟 **No lost leads** | Every event is stored before Meta gets a 200. Reconciliation every 15 minutes recovers leads whose webhook never arrived. |
-| 🔐 **Secure by default** | Signed webhooks, Fernet-encrypted secrets, HMAC/Bearer/header auth, SSRF guard that also blocks DNS rebinding. |
-| 📈 **Easy to run** | `docker compose up`, a guided setup with "Send test lead", dashboard, email alerts and `/health/`. |
+| 🔀 **Una app, pagine illimitate** | Instrada per form, con una destinazione predefinita per pagina come ripiego. I lead senza instradamento restano *non instradati*, mai persi. |
+| 🧩 **Sostituto diretto per n8n** | Il payload standard corrisponde a quello del trigger Facebook Lead Ads di n8n. Ti serve altro? Scrivilo con template Jinja2 in sandbox. |
+| 🔁 **Consegnato una sola volta per destinazione** | 7 tentativi in circa 1,5 giorni con backoff e `Retry-After`, `Idempotency-Key` su ogni richiesta, reinvio con un clic. |
+| 🛟 **Nessun lead perso** | Ogni evento viene salvato prima che Meta riceva un 200. La riconciliazione ogni 15 minuti recupera i lead il cui webhook non è mai arrivato. |
+| 🔐 **Sicuro di default** | Webhook firmati, segreti cifrati con Fernet, autenticazione HMAC/Bearer/header, protezione SSRF che blocca anche il DNS rebinding. |
+| 📈 **Facile da gestire** | `docker compose up`, una configurazione guidata con "Invia lead di prova", dashboard, avvisi via email e `/health/`. |
 
-## 🧭 How it works
+## 🧭 Come funziona
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
-  <img alt="LeadHook architecture: Meta Lead Ads sends a signed leadgen webhook to the Django web app, which stores the event in PostgreSQL and enqueues it on Redis. A Celery worker fetches the lead from the Meta Graph API, routes it and POSTs JSON to your webhooks, sending email alerts on failures. Celery beat schedules reconciliation, sweeping, form sync, page checks, silence checks, retention and the heartbeat." src="docs/images/architecture-light.png">
+  <img alt="Architettura di LeadHook: Meta Lead Ads invia un webhook leadgen firmato all'app web Django, che salva l'evento in PostgreSQL e lo mette in coda su Redis. Un worker Celery recupera il lead dalla Meta Graph API, lo instrada e invia il JSON ai tuoi webhook con una POST, mandando avvisi via email in caso di errori. Celery beat pianifica riconciliazione, recupero del lavoro perso, sincronizzazione dei form, controlli delle pagine, controlli di silenzio, conservazione dei dati e heartbeat." src="docs/images/architecture-light.png">
 </picture>
 
-1. **Receive** — Meta POSTs a signed `leadgen` event; LeadHook verifies `X-Hub-Signature-256`, stores it and answers 200 right away.
-2. **Fetch** — a worker reads the full lead (answers, ad, campaign) from the Graph API with the page token.
-3. **Route** — form destinations win; otherwise the page defaults; otherwise the lead waits as *unrouted*.
-4. **Deliver** — one delivery per destination, signed and retried; the lead's status follows its deliveries.
-5. **Keep watch** — beat runs reconciliation, a sweeper for lost work, form sync, token checks, silence alerts and retention.
+1. **Ricezione**: Meta invia con una POST un evento `leadgen` firmato; LeadHook verifica `X-Hub-Signature-256`, lo salva e risponde subito 200.
+2. **Recupero**: un worker legge il lead completo (risposte, inserzione, campagna) dalla Graph API con il token della pagina.
+3. **Instradamento**: vincono le destinazioni del form; altrimenti quelle predefinite della pagina; altrimenti il lead resta in attesa come *non instradato*.
+4. **Consegna**: una consegna per destinazione, firmata e ritentata; lo stato del lead segue quello delle sue consegne.
+5. **Sorveglianza**: beat esegue la riconciliazione, il recupero del lavoro perso, la sincronizzazione dei form, i controlli dei token, gli avvisi di silenzio e la conservazione dei dati.
 
-<sub>Diagram generated with [Archify](https://github.com/tt-a1i/archify) from `docs/architecture.archify.json`.</sub>
+<sub>Diagramma generato con [Archify](https://github.com/tt-a1i/archify) da `docs/architecture.archify.json`.</sub>
 
-## 🚀 Quick start
+## 🚀 Avvio rapido
 
-Requirements: Docker with Compose, a public HTTPS URL served by a reverse proxy (Caddy, Traefik, nginx…) that forwards to port 8000. Compose publishes the web container on `127.0.0.1:8000` only, so it is reachable from the host (and the proxy) but not directly from the internet; keep it behind the proxy.
+Requisiti: Docker con Compose, un URL HTTPS pubblico servito da un reverse proxy (Caddy, Traefik, nginx…) che inoltra alla porta 8000. Compose pubblica il container web solo su `127.0.0.1:8000`, quindi è raggiungibile dall'host (e dal proxy) ma non direttamente da internet; tienilo dietro il proxy.
 
 ```bash
 git clone https://github.com/flavioabbinante/leadhook.git && cd leadhook
@@ -74,31 +74,31 @@ docker compose up -d
 docker compose exec web python manage.py createsuperuser
 ```
 
-Open `https://<your-domain>/admin/`, then **Set up LeadHook** (`/admin/setup/`, also linked from the dashboard) and follow the steps.
+Apri `https://<your-domain>/admin/`, poi **Configurazione guidata** (`/admin/setup/`, raggiungibile anche dalla dashboard) e segui i passaggi.
 
-## 📘 Meta app setup
+## 📘 Configurazione dell'app Meta
 
-LeadHook uses your own Meta app. One-time preparation in Meta:
+LeadHook usa la tua app Meta. Preparazione da fare una volta sola in Meta:
 
-1. **Business Verification.** In Business Settings → Security Center, verify your business. Without it the app cannot go Live, and apps in development mode only receive test leads.
-2. **App.** In [Meta for Developers](https://developers.facebook.com/apps/) create an app of type **Business**, add the **Facebook Login for Business** and **Webhooks** products, and note the App ID and App secret (App settings → Basic).
-3. **Login.** In Facebook Login for Business → Settings, add the **Valid OAuth Redirect URI** shown in LeadHook's setup (`PUBLIC_BASE_URL/admin/setup/facebook/callback/`). Optionally create a **configuration** with a *System-user access token* and the permissions `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads`; its ID goes in the Meta app's *Login configuration ID*, and the connection then never expires. Without one, LeadHook asks for those permissions and keeps a 60-day token (page tokens derived from it do not expire; the dashboard alerts before it runs out).
-4. **Leads Access.** In Business Settings → Integrations → Leads Access, allow the app for each page; otherwise Meta returns leads without answers.
-5. **Live mode.** Switch the app to Live.
+1. **Business Verification.** In Business Settings → Security Center, verifica la tua azienda. Senza verifica l'app non può passare in modalità Live, e le app in modalità sviluppo ricevono solo lead di prova.
+2. **App.** In [Meta for Developers](https://developers.facebook.com/apps/) crea un'app di tipo **Business**, aggiungi i prodotti **Facebook Login for Business** e **Webhooks** e annota App ID e App secret (App settings → Basic).
+3. **Login.** In Facebook Login for Business → Settings, aggiungi il **Valid OAuth Redirect URI** mostrato nella configurazione guidata di LeadHook (`PUBLIC_BASE_URL/admin/setup/facebook/callback/`). Se vuoi, crea una **configuration** con un *System-user access token* e i permessi `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads`; il suo ID va nel campo *ID configurazione di accesso* dell'app Meta, e così la connessione non scade mai. Senza, LeadHook chiede quei permessi e conserva un token di 60 giorni (i token delle pagine ottenuti da esso non scadono; la dashboard ti avvisa prima che finisca).
+4. **Leads Access.** In Business Settings → Integrations → Leads Access, autorizza l'app per ogni pagina; altrimenti Meta restituisce i lead senza risposte.
+5. **Modalità Live.** Passa l'app in modalità Live.
 
-Then in LeadHook, open **Set up LeadHook** (`/admin/setup/`):
+Poi in LeadHook apri **Configurazione guidata** (`/admin/setup/`):
 
-1. Add the Meta app with the App ID and App secret.
-2. Press **Connect with Facebook** and allow LeadHook. It stores the token and registers the webhook on the app, unless the app already sends its webhook to another URL: an app has one callback URL, so LeadHook never replaces it (this needs `PUBLIC_BASE_URL` reachable over HTTPS; the step also shows the Callback URL and Verify token to set it up by hand).
-3. Select your pages and **Connect**: LeadHook subscribes each page to lead events and imports its forms.
-4. Create a destination and connect it in **Routing** to a page (default for all its forms) or a single form.
-5. **Send test lead** and watch it arrive under Leads and Deliveries.
+1. Aggiungi l'app Meta con App ID e App secret.
+2. Premi **Collega con Facebook** e autorizza LeadHook. LeadHook salva il token e registra il webhook sull'app, a meno che l'app non invii già il suo webhook a un altro URL: un'app ha un solo URL di callback, quindi LeadHook non lo sostituisce mai (serve che `PUBLIC_BASE_URL` sia raggiungibile in HTTPS; il passaggio mostra anche URL di callback e token di verifica per configurarlo a mano).
+3. Seleziona le tue pagine e premi **Collega le pagine selezionate**: LeadHook iscrive ogni pagina agli eventi dei lead e ne importa i form.
+4. Crea una destinazione e collegala in **Routing** a una pagina (predefinita per tutti i suoi form) o a un singolo form.
+5. Premi **Invia lead di prova** e guardalo arrivare in Lead e Consegne.
 
-A System User token pasted by hand in the Meta app still works instead of the login.
+In alternativa al login funziona ancora un token di System User incollato a mano nell'app Meta.
 
 ## 📦 Payload
 
-With an empty template, every destination receives:
+Con un template vuoto, ogni destinazione riceve:
 
 ```json
 {
@@ -116,11 +116,11 @@ With an empty template, every destination receives:
 }
 ```
 
-Headers: `Idempotency-Key` (the lead ID), `X-LeadHook-Timestamp`, and with HMAC authentication `X-LeadHook-Signature: sha256=HMAC_SHA256(secret, timestamp + "." + body)`.
+Header: `Idempotency-Key` (l'ID del lead), `X-LeadHook-Timestamp` e, con l'autenticazione HMAC, `X-LeadHook-Signature: sha256=HMAC_SHA256(secret, timestamp + "." + body)`.
 
-### Custom templates
+### Template personalizzati
 
-Write any JSON with Jinja2 placeholders. All payload fields above are available as variables.
+Scrivi qualsiasi JSON con segnaposto Jinja2. Tutti i campi del payload qui sopra sono disponibili come variabili.
 
 ```jinja
 {
@@ -132,48 +132,48 @@ Write any JSON with Jinja2 placeholders. All payload fields above are available 
 }
 ```
 
-Always end each value with `| tojson`. The admin shows a live preview of the rendered payload.
+Chiudi sempre ogni valore con `| tojson`. L'admin mostra un'anteprima in tempo reale del payload generato.
 
-**Success condition** (optional): a Jinja2 expression evaluated against the parsed response, e.g. `response.success == true`. When it is false the delivery is retried.
+**Condizione di successo** (facoltativa): un'espressione Jinja2 valutata sulla risposta interpretata, es. `response.success == true`. Quando è falsa, la consegna viene ritentata.
 
-### Retries
+### Nuovi tentativi
 
-Network errors, timeouts, 5xx, 408 and 429 are retried after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h (`Retry-After` is honored) — 7 attempts over about a day and a half. Other 4xx responses fail immediately. Finished deliveries (successful or failed) can be resent from **Deliveries** in the admin, which starts a fresh cycle of 7 attempts; deliveries still pending are skipped.
+Errori di rete, timeout, 5xx, 408 e 429 vengono ritentati dopo 1 min, 5 min, 30 min, 2 h, 6 h e 24 h (`Retry-After` viene rispettato): 7 tentativi in circa un giorno e mezzo. Le altre risposte 4xx falliscono subito. Le consegne concluse (riuscite o fallite) si possono reinviare da **Consegne** nell'admin, che avvia un nuovo ciclo di 7 tentativi; le consegne ancora in corso vengono saltate.
 
-## 📊 Monitoring
+## 📊 Monitoraggio
 
-- **Dashboard** (admin home): leads today and per form, failed deliveries, unrouted leads, page health, background job status.
-- **Email alerts** to `ALERT_EMAILS`: permanently failed delivery, unrouted lead, page token or subscription problem, lead that could not be fetched, unusual silence. At most one email per kind every 15 minutes.
-- **`GET /health/`** returns 200 with `{"database": "ok", "redis": "ok", "beat": "ok"}`, or 503 naming what is wrong. `beat` turns `stale` when the background jobs have not run for 5 minutes. The endpoint is exempt from the HTTPS redirect; the `Host` header must still be in `ALLOWED_HOSTS`.
-- **Background jobs** (Celery beat): reconciliation (15 min), sweeper (5 min), form sync (1 h), silence check (1 h), page and token check (daily), retention purge (daily).
-- **Retention:** after `LEAD_RETENTION_DAYS` the lead answers, webhook payloads and request/response bodies are erased; IDs, ad/campaign names and statuses are kept. Purged leads cannot be resent.
+- **Dashboard** (home dell'admin): lead di oggi e per form, consegne fallite, lead non instradati, stato delle pagine, stato dei job in background.
+- **Avvisi via email** a `ALERT_EMAILS`: consegna fallita definitivamente, lead non instradato, problema con il token o l'iscrizione di una pagina, lead che non è stato possibile recuperare, silenzio insolito. Al massimo una email per tipo ogni 15 minuti.
+- **`GET /health/`** restituisce 200 con `{"database": "ok", "redis": "ok", "beat": "ok"}`, oppure 503 indicando cosa non va. `beat` diventa `stale` quando i job in background non girano da 5 minuti. L'endpoint è escluso dal redirect HTTPS; l'header `Host` deve comunque essere in `ALLOWED_HOSTS`.
+- **Job in background** (Celery beat): riconciliazione (15 min), recupero del lavoro perso (5 min), sincronizzazione dei form (1 h), controllo del silenzio (1 h), controllo di pagine e token (giornaliero), eliminazione per conservazione (giornaliera).
+- **Conservazione:** dopo `LEAD_RETENTION_DAYS` vengono cancellati le risposte dei lead, i payload dei webhook e i corpi di richieste e risposte; restano ID, nomi di inserzioni e campagne e stati. I lead eliminati non si possono reinviare.
 
-## 🔧 Configuration
+## 🔧 Configurazione
 
-| Variable | Default | Description |
+| Variabile | Predefinito | Descrizione |
 |---|---|---|
-| `DJANGO_SECRET_KEY` | — | Required. |
-| `LEADHOOK_ENCRYPTION_KEY` | — | Required. Fernet key for stored secrets. Never change it once set. |
-| `PUBLIC_BASE_URL` | `http://localhost:8000` | Public URL, used to build the webhook callback URL. |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated host names. |
-| `DATABASE_URL` | SQLite | PostgreSQL recommended. |
-| `REDIS_URL` | `redis://localhost:6379/0` | Celery broker and cache (alert throttling, heartbeat). |
-| `META_GRAPH_VERSION` | see `.env.example` | Graph API version for new Meta apps. |
-| `ALLOW_PRIVATE_DESTINATIONS` | `false` | Allow destinations on private networks (e.g. n8n in the same Docker network). |
-| `CSRF_TRUSTED_ORIGINS` | `PUBLIC_BASE_URL` | Comma-separated origins allowed to submit admin forms, e.g. `https://leads.example.com`. |
-| `SECURE_SSL_REDIRECT` | `true` | Set to `false` only for local testing over HTTP. |
-| `SECURE_HSTS_SECONDS` | `31536000` | HSTS max-age when `SECURE_SSL_REDIRECT` is on; use a small value while testing. |
-| `DJANGO_DEBUG` | `false` | Debug mode. Never enable in production. |
-| `LOG_LEVEL` | `INFO` | Log level for the web, worker and beat processes. |
-| `WEB_CONCURRENCY` | `3` | Number of gunicorn workers in the web container. |
-| `EMAIL_URL` | `consolemail://` | SMTP server for alerts, e.g. `smtp+tls://user:password@smtp.example.com:587`. |
-| `DEFAULT_FROM_EMAIL` | `leadhook@localhost` | Sender of alert emails. |
-| `ALERT_EMAILS` | — | Comma-separated recipients; no alerts when empty. |
-| `LEAD_RETENTION_DAYS` | `90` | Lead answers, webhook payloads and request/response bodies older than this are erased. |
-| `SILENCE_ALERT_HOURS` | `24` | Alert when a page that had leads in the last 30 days has none for this long. |
-| `REQUESTS_CA_BUNDLE` | — | CA bundle for destinations behind a private certificate authority. |
+| `DJANGO_SECRET_KEY` | — | Obbligatoria. |
+| `LEADHOOK_ENCRYPTION_KEY` | — | Obbligatoria. Chiave Fernet per i segreti salvati. Non cambiarla mai dopo averla impostata. |
+| `PUBLIC_BASE_URL` | `http://localhost:8000` | URL pubblico, usato per costruire l'URL di callback del webhook. |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Nomi host separati da virgole. |
+| `DATABASE_URL` | SQLite | Consigliato PostgreSQL. |
+| `REDIS_URL` | `redis://localhost:6379/0` | Broker Celery e cache (limitazione degli avvisi, heartbeat). |
+| `META_GRAPH_VERSION` | vedi `.env.example` | Versione della Graph API per le nuove app Meta. |
+| `ALLOW_PRIVATE_DESTINATIONS` | `false` | Consente destinazioni su reti private (es. n8n nella stessa rete Docker). |
+| `CSRF_TRUSTED_ORIGINS` | `PUBLIC_BASE_URL` | Origini separate da virgole autorizzate a inviare i form dell'admin, es. `https://leads.example.com`. |
+| `SECURE_SSL_REDIRECT` | `true` | Impostala a `false` solo per test in locale su HTTP. |
+| `SECURE_HSTS_SECONDS` | `31536000` | max-age HSTS quando `SECURE_SSL_REDIRECT` è attivo; usa un valore basso mentre fai test. |
+| `DJANGO_DEBUG` | `false` | Modalità debug. Non attivarla mai in produzione. |
+| `LOG_LEVEL` | `INFO` | Livello di log per i processi web, worker e beat. |
+| `WEB_CONCURRENCY` | `3` | Numero di worker gunicorn nel container web. |
+| `EMAIL_URL` | `consolemail://` | Server SMTP per gli avvisi, es. `smtp+tls://user:password@smtp.example.com:587`. |
+| `DEFAULT_FROM_EMAIL` | `leadhook@localhost` | Mittente delle email di avviso. |
+| `ALERT_EMAILS` | — | Destinatari separati da virgole; se vuota, nessun avviso. |
+| `LEAD_RETENTION_DAYS` | `90` | Le risposte dei lead, i payload dei webhook e i corpi di richieste e risposte più vecchi di così vengono cancellati. |
+| `SILENCE_ALERT_HOURS` | `24` | Avvisa quando una pagina che ha avuto lead negli ultimi 30 giorni non ne riceve per questo intervallo. |
+| `REQUESTS_CA_BUNDLE` | — | Bundle di CA per destinazioni dietro un'autorità di certificazione privata. |
 
-## 🧪 Development
+## 🧪 Sviluppo
 
 ```bash
 uv sync
@@ -181,8 +181,8 @@ uv run pytest            # ~300 tests, no Redis or PostgreSQL needed
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Local setup, project layout, testing conventions and the pull request checklist are in **[CONTRIBUTING.md](CONTRIBUTING.md)**. Found a vulnerability? See **[SECURITY.md](SECURITY.md)**.
+Configurazione locale, struttura del progetto, convenzioni per i test e checklist della pull request sono in **[CONTRIBUTING.md](CONTRIBUTING.md)**. Hai trovato una vulnerabilità? Leggi **[SECURITY.md](SECURITY.md)**.
 
-## 📄 License
+## 📄 Licenza
 
-[GNU AGPL-3.0](LICENSE). If you run a modified version as a service, you must publish your changes.
+[GNU AGPL-3.0](LICENSE). Se offri una versione modificata come servizio, devi pubblicare le tue modifiche.

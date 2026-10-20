@@ -156,13 +156,13 @@ def _connect_pages(request, meta_app: MetaApp, page_ids: list[str]) -> None:
         except GraphError as exc:
             messages.error(request, f"Pagina {raw.get('name') or page_id}: {exc}")
             continue
-        messages.success(request, f"Pagina {page} collegata, moduli trovati: {form_count}.")
+        messages.success(request, f"Pagina {page} collegata, form trovati: {form_count}.")
 
 
 def _send_test_lead(request, form_id: str) -> None:
     form = Form.objects.select_related("page__meta_app").filter(form_id=form_id).first()
     if form is None:
-        messages.error(request, "Scegli un modulo.")
+        messages.error(request, "Scegli un form.")
         return
     try:
         client_for_page(form.page).create_test_lead(form.form_id)
@@ -170,7 +170,7 @@ def _send_test_lead(request, form_id: str) -> None:
         messages.error(
             request,
             f"Meta ha rifiutato il lead di prova: {exc}. Meta tiene un solo lead di prova "
-            "per modulo: elimina quello precedente nel Lead Ads Testing Tool e riprova.",
+            "per form: elimina quello precedente nel Lead Ads Testing Tool e riprova.",
         )
         return
     messages.success(

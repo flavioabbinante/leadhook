@@ -186,7 +186,7 @@ class FieldMapping(models.Model):
     LEAD_SOURCES = {
         "id": "ID del lead Meta",
         "created_time": "Data di creazione del lead",
-        "form.name": "Nome del modulo",
+        "form.name": "Nome del form",
         "page.name": "Nome della pagina",
         "campaign.name": "Nome della campagna",
         "adset.name": "Nome del gruppo di inserzioni",

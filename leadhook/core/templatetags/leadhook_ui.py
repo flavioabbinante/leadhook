@@ -36,14 +36,14 @@ NAVIGATION = [
         [
             ("admin:meta_metaapp_changelist", "App Meta", "box", "meta.view_metaapp"),
             ("admin:meta_page_changelist", "Pagine", "flag", "meta.view_page"),
-            ("admin:meta_form_changelist", "Moduli", "list", "meta.view_form"),
+            ("admin:meta_form_changelist", "Form", "list", "meta.view_form"),
             (
                 "admin:destinations_destination_changelist",
                 "Destinazioni",
                 "target",
                 "destinations.view_destination",
             ),
-            ("routing", "Instradamento", "shuffle", "meta.view_form"),
+            ("routing", "Routing", "shuffle", "meta.view_form"),
         ],
     ),
     (

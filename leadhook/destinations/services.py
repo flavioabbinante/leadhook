@@ -31,8 +31,8 @@ def create_deliveries(lead: Lead) -> list[Delivery]:
             send_alert(
                 AlertKind.UNROUTED,
                 "Lead non instradato",
-                f"Il lead {lead.leadgen_id} (pagina {lead.page_external_id}, modulo "
-                f"{lead.form_external_id}) non ha destinazioni attive. Assegnane una al modulo "
+                f"Il lead {lead.leadgen_id} (pagina {lead.page_external_id}, form "
+                f"{lead.form_external_id}) non ha destinazioni attive. Assegnane una al form "
                 "o una predefinita alla pagina, poi rielabora il lead.",
             )
         lead.status = Lead.Status.UNROUTED
