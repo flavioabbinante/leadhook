@@ -19,7 +19,7 @@ def sync_forms() -> None:
             sync_page_forms(page)
         except GraphError as exc:
             if exc.is_token_error:
-                record_page_error(page, f"Meta rejected the page token: {exc}")
+                record_page_error(page, f"Meta ha rifiutato il token della pagina: {exc}")
             else:
                 logger.warning("Form sync of page %s failed: %s", page.page_id, exc)
 
@@ -42,7 +42,7 @@ def check_silence() -> None:
     # One email for all pages: per-kind throttling would drop separate ones.
     send_alert(
         AlertKind.SILENCE,
-        f"No leads from {len(pages)} page(s)",
-        "\n".join(f"{page}: last lead {page.last_lead_at:%Y-%m-%d %H:%M} UTC" for page in pages),
+        f"Pagine senza lead: {len(pages)}",
+        "\n".join(f"{page}: ultimo lead {page.last_lead_at:%d/%m/%Y %H:%M} UTC" for page in pages),
     )
     Page.objects.filter(pk__in=[page.pk for page in pages]).update(silence_alerted_at=now)

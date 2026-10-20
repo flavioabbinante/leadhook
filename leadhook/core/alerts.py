@@ -11,9 +11,9 @@ from .tasks import send_alert_email
 logger = logging.getLogger(__name__)
 
 FOOTER = (
-    "\n\nOpen LeadHook: {url}/admin/\n"
-    "Alerts of this kind are paused for 15 minutes after each email; "
-    "the admin dashboard shows everything."
+    "\n\nApri LeadHook: {url}/admin/\n"
+    "Dopo ogni email, gli avvisi di questo tipo restano in pausa per 15 minuti; "
+    "nella dashboard trovi tutto."
 )
 
 

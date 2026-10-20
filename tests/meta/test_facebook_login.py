@@ -61,7 +61,7 @@ def test_callback_stores_system_user_token_registers_webhook_and_lists_pages(adm
 
     response = admin_client.get(CALLBACK, {"state": state, "code": "the-code"}, **HOST)
     assert response["Location"] == "/admin/setup/?load=pages#pages"
-    assert "Webhook registered" in _messages(response)
+    assert "Webhook registrato" in _messages(response)
     app.refresh_from_db()
     assert app.access_token == "suat-token"
     assert app.token_type == MetaApp.TokenType.SYSTEM_USER
@@ -101,7 +101,7 @@ def test_callback_exchanges_user_token_for_long_lived_one(admin_client):
     )
 
     response = admin_client.get(CALLBACK, {"state": state, "code": "the-code"}, **HOST)
-    assert "could not be registered automatically" in _messages(response)
+    assert "registrare il webhook in automatico" in _messages(response)
     app.refresh_from_db()
     assert app.access_token == "long-token"
     assert app.token_type == MetaApp.TokenType.USER
@@ -112,7 +112,7 @@ def test_callback_rejects_wrong_state(admin_client):
     app = make_meta_app(access_token="")
     _start(admin_client)
     response = admin_client.get(CALLBACK, {"state": "forged", "code": "the-code"}, **HOST)
-    assert "did not start here" in _messages(response)
+    assert "non è partito da qui" in _messages(response)
     app.refresh_from_db()
     assert app.access_token == ""
 
@@ -121,7 +121,7 @@ def test_callback_reports_cancelled_login(admin_client):
     make_meta_app(access_token="")
     state = _start(admin_client)
     response = admin_client.get(CALLBACK, {"state": state, "error": "access_denied"}, **HOST)
-    assert "was not connected" in _messages(response)
+    assert "non è stato collegato" in _messages(response)
 
 
 def test_login_needs_change_permission(client):
@@ -144,7 +144,7 @@ def test_callback_keeps_a_webhook_that_points_elsewhere(admin_client):
     subscribe = responses.post(f"{BASE}/1000/subscriptions", json={"success": True})
 
     response = admin_client.get(CALLBACK, {"state": state, "code": "the-code"}, **HOST)
-    assert "already sends leads to https://other.example/hook" in _messages(response)
+    assert "invia già i lead a https://other.example/hook" in _messages(response)
     assert not subscribe.calls
 
 

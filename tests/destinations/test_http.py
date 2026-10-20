@@ -124,7 +124,7 @@ def test_success_condition_not_met_is_retried():
     destination = make_destination(success_condition="response.success == true")
     result = send_request(destination, "{}", HEADERS)
     assert result.outcome == "retry"
-    assert result.error == "Success condition not met"
+    assert result.error == "Condizione di successo non soddisfatta"
 
 
 @responses.activate
@@ -177,7 +177,7 @@ def test_blocked_destination_fails_without_sending(fake_dns):
     destination = make_destination(url="https://internal.test/hook")
     result = send_request(destination, "{}", HEADERS)
     assert result.outcome == "fail"
-    assert "non-public" in result.error
+    assert "non pubblico" in result.error
 
 
 def test_parse_retry_after():
@@ -220,7 +220,7 @@ def test_parse_retry_after_naive_date_is_utc_and_far_future_is_capped():
 def test_invalid_port_fails_without_raising():
     result = send_request(make_destination(url="https://example.com:99999/"), "{}", HEADERS)
     assert result.outcome == "fail"
-    assert "Invalid destination URL" in result.error
+    assert "URL della destinazione non valido" in result.error
 
 
 def test_bad_idna_host_fails_without_raising(monkeypatch):
@@ -230,7 +230,7 @@ def test_bad_idna_host_fails_without_raising(monkeypatch):
     monkeypatch.setattr("leadhook.destinations.http.resolve_host", resolve)
     result = send_request(make_destination(url="https://bad.example/"), "{}", HEADERS)
     assert result.outcome == "fail"
-    assert "Invalid destination host" in result.error
+    assert "Nome host della destinazione non valido" in result.error
 
 
 def test_blocked_message_does_not_leak_credentials_or_path(fake_dns):
@@ -238,7 +238,7 @@ def test_blocked_message_does_not_leak_credentials_or_path(fake_dns):
     url = "https://user:s3cret@internal.test/hook?token=abc"
     result = send_request(make_destination(url=url), "{}", HEADERS)
     assert result.outcome == "fail"
-    assert "non-public" in result.error
+    assert "non pubblico" in result.error
     assert "s3cret" not in result.error
     assert "token=abc" not in result.error
     with pytest.raises(BlockedDestination) as info:
@@ -272,12 +272,12 @@ def test_dns_failure_is_retried(monkeypatch):
     monkeypatch.setattr("leadhook.destinations.http.resolve_host", fail)
     result = send_request(make_destination(), "{}", HEADERS)
     assert result.outcome == "retry"
-    assert "DNS resolution failed" in result.error
+    assert "Risoluzione DNS non riuscita" in result.error
 
 
 def test_bad_idna_host_fails_even_when_private_allowed(settings):
     settings.ALLOW_PRIVATE_DESTINATIONS = True
-    with pytest.raises(BlockedDestination, match="Invalid destination host name"):
+    with pytest.raises(BlockedDestination, match="Nome host della destinazione non valido"):
         check_destination_url("https://" + "a" * 64 + ".example.com/")
 
 
@@ -288,7 +288,7 @@ def test_connection_to_private_peer_is_blocked_after_dns_check(fake_dns):
         destination = make_destination(url=f"http://localhost:{port}/lead")
         result = send_request(destination, "{}", HEADERS)
     assert result.outcome == "fail"
-    assert "non-public address (127.0.0.1)" in result.error
+    assert "indirizzo non pubblico (127.0.0.1)" in result.error
 
 
 @responses.activate

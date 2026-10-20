@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
     show(document.querySelector(".field-auth_header_name"), auth.value === "header");
     // The secret is the bot token for Telegram, otherwise only needed with authentication.
     show(document.querySelector(".field-secret")?.closest("fieldset"), telegram || auth.value !== "none");
-    if (secretLabel) secretLabel.textContent = telegram ? "Bot token:" : secretText;
+    if (secretLabel) secretLabel.textContent = telegram ? "Token del bot:" : secretText;
   }
 
   kind.addEventListener("change", sync);

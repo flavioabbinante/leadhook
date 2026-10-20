@@ -21,9 +21,9 @@ def invitation_link(token: str) -> str:
 
 def send_invitation(invitation: Invitation, link: str) -> None:
     send_mail(
-        "You are invited to LeadHook",
-        f"You have been invited to LeadHook.\n\nCreate your account here: {link}\n\n"
-        f"The link works once and expires on {invitation.expires_at:%d %b %Y}.",
+        "Sei stato invitato su LeadHook",
+        f"Hai ricevuto un invito a LeadHook.\n\nCrea il tuo account qui: {link}\n\n"
+        f"Il link si può usare una sola volta e scade il {invitation.expires_at:%d/%m/%Y}.",
         None,
         [invitation.email],
     )
@@ -32,7 +32,7 @@ def send_invitation(invitation: Invitation, link: str) -> None:
 @never_cache
 def accept_invitation(request: HttpRequest, token: str) -> HttpResponse:
     invitation = Invitation.objects.filter(token_hash=hash_token(token)).first()
-    context = {**admin.site.each_context(request), "title": "Create your account"}
+    context = {**admin.site.each_context(request), "title": "Crea il tuo account"}
     if invitation is None or not invitation.is_pending:
         return render(request, "admin/leadhook_invitation.html", context, status=410)
     form = UserCreationForm(request.POST or None)

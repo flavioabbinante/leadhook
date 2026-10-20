@@ -800,7 +800,7 @@ html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3
 /* Lead pipeline: n8n-style nodes joined by edges, deliveries as parallel branches. */
 .lh-flow { display: flex; align-items: center; padding: 8px 0; overflow-x: auto; }
 .lh-flow-node {
-  display: flex; flex-direction: column; gap: 4px; flex: none; width: 150px; padding: 12px;
+  display: flex; flex-direction: column; gap: 4px; flex: none; width: 140px; padding: 12px;
   background: var(--lh-surface); border: 2px solid var(--lh-line); border-radius: var(--lh-radius-sm);
   box-shadow: var(--lh-shadow-sm); color: var(--lh-text); text-decoration: none;
 }
@@ -819,7 +819,7 @@ a.lh-flow-node:hover { border-color: var(--lh-orange); text-decoration: none; }
 .lh-flow-error .lh-flow-icon { background: var(--lh-red); }
 .lh-flow-pending { border-style: dashed; }
 .lh-flow-pending .lh-flow-icon { background: var(--lh-amber); }
-.lh-flow-edge { flex: none; width: 24px; height: 2px; background: var(--lh-track); }
+.lh-flow-edge { flex: none; width: 16px; height: 2px; background: var(--lh-track); }
 .lh-flow-branches { display: flex; flex-direction: column; gap: 10px; padding-left: 14px; border-left: 2px solid var(--lh-track); }
 @media (max-width: 767px) {
   .lh-flow { flex-direction: column; align-items: stretch; }

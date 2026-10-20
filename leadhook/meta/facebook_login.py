@@ -51,37 +51,38 @@ def facebook_callback(request):
     state = request.GET.get("state", "")
     # The state ties the callback to a login this user started (CSRF protection for OAuth).
     if not expected or not secrets.compare_digest(expected, state):
-        messages.error(request, "The Facebook login expired or did not start here. Try again.")
+        messages.error(request, "L'accesso a Facebook è scaduto o non è partito da qui. Riprova.")
         return redirect("setup")
     code = request.GET.get("code")
     if not code:
-        reason = request.GET.get("error_description") or "you cancelled the login"
-        messages.warning(request, f"Facebook was not connected: {reason}.")
+        reason = request.GET.get("error_description") or "hai annullato l'accesso"
+        messages.warning(request, f"Facebook non è stato collegato: {reason}.")
         return redirect("setup")
     try:
         connect_with_code(meta_app, code)
     except GraphError as exc:
-        messages.error(request, f"Facebook refused the connection: {exc}")
+        messages.error(request, f"Facebook ha rifiutato il collegamento: {exc}")
         return redirect("setup")
-    messages.success(request, "Facebook connected. Choose the pages to receive leads from.")
+    messages.success(request, "Facebook collegato. Scegli le pagine da cui ricevere i lead.")
     try:
         other = _other_callback_url(meta_app)
         if other:
             # One callback URL per app: replacing it would cut off whoever uses it now.
             messages.warning(
                 request,
-                f"The Meta app already sends leads to {other}. LeadHook left it untouched: "
-                "use a Meta app of your own, or replace the webhook by hand if nobody needs it.",
+                f"L'app Meta invia già i lead a {other}. LeadHook non l'ha toccato: usa "
+                "un'app Meta tutta tua, o sostituisci il webhook a mano se non serve a nessuno.",
             )
         else:
             subscribe_app_webhook(meta_app)
-            messages.success(request, "Webhook registered on the Meta app.")
+            messages.success(request, "Webhook registrato sull'app Meta.")
     except GraphError as exc:
         # Usually PUBLIC_BASE_URL is not reachable from the internet (e.g. on localhost).
         messages.warning(
             request,
-            f"The webhook could not be registered automatically ({exc}). "
-            "Make sure PUBLIC_BASE_URL is reachable over HTTPS, or set it up by hand below.",
+            f"Non è stato possibile registrare il webhook in automatico ({exc}). "
+            "Controlla che PUBLIC_BASE_URL sia raggiungibile in HTTPS, "
+            "o configuralo a mano qui sotto.",
         )
     return redirect(reverse("setup") + "?load=pages#pages")
 

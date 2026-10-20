@@ -18,8 +18,9 @@ def _offer_unrouted_leads(modeladmin, request, leads, lead_filter: str) -> None:
     modeladmin.message_user(
         request,
         format_html(
-            '{} unrouted lead(s) can now be delivered: <a href="{}">select them and run '
-            "“Reprocess selected leads”</a>.",
+            '{} lead senza instradamento ora possono essere consegnati: <a href="{}">selezionali '
+            "ed esegui "
+            "“Rielabora i lead selezionati”</a>.",
             count,
             url,
         ),
@@ -43,26 +44,26 @@ class MetaAppAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {"fields": ("name", "app_id", "app_secret", "graph_version", "login_config_id")}),
         (
-            "Access token",
+            "Token di accesso",
             {
                 "fields": ("access_token", "token_type", "token_expires_at"),
-                "description": "Filled in by “Connect with Facebook” in the setup.",
+                "description": "Compilato da “Collega con Facebook” nella configurazione guidata.",
             },
         ),
         (
-            "Webhook setup",
+            "Configurazione webhook",
             {
                 "fields": ("callback_url", "verify_token"),
                 "description": (
-                    "Paste these values in your Meta app: Webhooks → Page → Callback URL."
+                    "Incolla questi valori nella tua app Meta: Webhooks → Page → Callback URL."
                 ),
             },
         ),
     )
 
-    @admin.display(description="Callback URL")
+    @admin.display(description="URL di callback")
     def callback_url(self, obj: MetaApp) -> str:
-        return obj.webhook_url() if obj.pk else "Available after saving."
+        return obj.webhook_url() if obj.pk else "Disponibile dopo il salvataggio."
 
     def save_model(self, request, obj, form, change):
         if not change:

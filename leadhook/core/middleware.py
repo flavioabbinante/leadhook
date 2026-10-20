@@ -6,8 +6,9 @@ from django.http import HttpResponse
 logger = logging.getLogger(__name__)
 
 MESSAGE = (
-    "LeadHook cannot decrypt the secrets stored in its database: LEADHOOK_ENCRYPTION_KEY is "
-    "not the key they were encrypted with. Restore the original key and restart LeadHook."
+    "LeadHook non riesce a decifrare le chiavi segrete salvate nel database: "
+    "LEADHOOK_ENCRYPTION_KEY non è la chiave usata per cifrarle. "
+    "Ripristina la chiave originale e riavvia LeadHook."
 )
 
 
