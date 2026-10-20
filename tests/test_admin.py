@@ -339,7 +339,7 @@ def test_saving_form_with_destinations_offers_unrouted_leads(admin_client):
         follow=True,
     )
     text = " ".join(str(m) for m in get_messages(response.wsgi_request))
-    assert "1 lead senza instradamento" in text
+    assert "1 lead senza routing" in text
     assert f"form__id__exact={form.pk}" in text
 
 

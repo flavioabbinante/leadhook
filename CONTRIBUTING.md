@@ -1,35 +1,36 @@
-# Contributing to LeadHook
+# Contribuire a LeadHook
 
-Thanks for helping! LeadHook moves personal data and access tokens between Meta and other systems, so we value **small, well-tested, boring changes** over clever ones. This guide gets you from clone to merged pull request.
+Grazie per il tuo aiuto! LeadHook sposta dati personali e token di accesso tra Meta e altri sistemi, quindi preferiamo **modifiche piccole, ben testate e noiose** a quelle brillanti. Questa guida ti porta dal clone alla pull request unita.
 
-- [Ground rules](#ground-rules)
-- [Ways to contribute](#ways-to-contribute)
-- [Local setup](#local-setup)
-- [How the code is organized](#how-the-code-is-organized)
-- [Making a change](#making-a-change)
-- [Testing](#testing)
-- [Conventions](#conventions)
-- [Recipes](#recipes)
-- [Pull request checklist](#pull-request-checklist)
+- [Regole di base](#regole-di-base)
+- [Come contribuire](#come-contribuire)
+- [Configurazione locale](#configurazione-locale)
+- [Come è organizzato il codice](#come-è-organizzato-il-codice)
+- [Fare una modifica](#fare-una-modifica)
+- [Test](#test)
+- [Convenzioni](#convenzioni)
+- [Ricette](#ricette)
+- [Checklist della pull request](#checklist-della-pull-request)
 
-## Ground rules
+## Regole di base
 
-- **English only:** code, identifiers, comments, admin UI strings, docs, commit messages, issues and pull requests.
-- **No real data, ever.** Never commit or paste real leads, page IDs, tokens or app secrets — not in fixtures, logs, screenshots or issues. Test fixtures are anonymized (see `tests/fixtures.py`).
-- **Security issues go private.** Use GitHub's *Report a vulnerability* button, never a public issue. See [SECURITY.md](SECURITY.md).
-- **Open an issue first** for anything bigger than a bug fix or a small improvement, so we agree on the approach before you write code.
-- By contributing you agree that your work is licensed under [AGPL-3.0](LICENSE).
+- **Inglese:** codice, identificatori, commenti, log, messaggi di commit, issue e pull request.
+- **Italiano:** testi dell'interfaccia admin, email di avviso, errori mostrati all'utente e documentazione. I testi di Django senza traduzione italiana stanno in `leadhook/locale/it/LC_MESSAGES/*.po`: dopo una modifica rigenera i `.mo` con `uv run --with polib python -c "import polib; polib.pofile('leadhook/locale/it/LC_MESSAGES/djangojs.po').save_as_mofile('leadhook/locale/it/LC_MESSAGES/djangojs.mo')"` (stesso comando per `django.po`).
+- **Mai dati reali.** Non fare mai commit né incollare lead, ID di pagine, token o app secret reali: né nelle fixture, né nei log, negli screenshot o nelle issue. Le fixture dei test sono anonimizzate (vedi `tests/fixtures.py`).
+- **I problemi di sicurezza si segnalano in privato.** Usa il pulsante *Report a vulnerability* di GitHub, mai una issue pubblica. Vedi [SECURITY.md](SECURITY.md).
+- **Apri prima una issue** per qualsiasi cosa più grande di una correzione di bug o di un piccolo miglioramento, così concordiamo l'approccio prima che tu scriva codice.
+- Contribuendo accetti che il tuo lavoro sia rilasciato sotto licenza [AGPL-3.0](LICENSE).
 
-## Ways to contribute
+## Come contribuire
 
-- 🐛 **Report a bug** — include the LeadHook commit, how you run it (Compose or not), the steps to reproduce, and the relevant log lines *with IDs only*.
-- 💡 **Propose a feature** — describe the problem first; the [design spec](docs/superpowers/specs/2026-10-15-leadhook-design.md) lists what is deliberately out of scope for v1.
-- 📖 **Improve the docs** — the README's Meta setup guide benefits most from people who just went through it.
-- 🧪 **Add tests** for edge cases you met with real Meta payloads (anonymized).
+- 🐛 **Segnala un bug**: indica il commit di LeadHook, come lo esegui (con Compose o no), i passaggi per riprodurlo e le righe di log rilevanti *con solo gli ID*.
+- 💡 **Proponi una funzionalità**: descrivi prima il problema; la [specifica di progetto](docs/superpowers/specs/2026-10-15-leadhook-design.md) elenca cosa è volutamente escluso dalla v1.
+- 📖 **Migliora la documentazione**: la guida alla configurazione Meta nel README guadagna più di tutto da chi l'ha appena seguita.
+- 🧪 **Aggiungi test** per i casi limite che hai incontrato con payload Meta reali (anonimizzati).
 
-## Local setup
+## Configurazione locale
 
-Requirements: Python 3.12, [uv](https://github.com/astral-sh/uv); Docker is optional.
+Requisiti: Python 3.12, [uv](https://github.com/astral-sh/uv); Docker è facoltativo.
 
 ```bash
 git clone https://github.com/flavioabbinante/leadhook.git && cd leadhook
@@ -38,7 +39,7 @@ uv run pytest                             # Celery runs eagerly on in-memory SQL
 uv run ruff check . && uv run ruff format --check .
 ```
 
-To run the app itself:
+Per avviare l'app vera e propria:
 
 ```bash
 cp .env.example .env
@@ -52,8 +53,8 @@ uv run celery -A leadhook worker -l info  # in a second terminal
 uv run celery -A leadhook beat -l info    # in a third, for periodic jobs
 ```
 
-To develop on PostgreSQL instead of SQLite, start the database and Redis from Compose on
-localhost only and point `.env` at them:
+Per sviluppare su PostgreSQL invece che su SQLite, avvia il database e Redis da Compose solo su
+localhost e punta `.env` verso di loro:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
@@ -61,39 +62,39 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres re
 #       REDIS_URL=redis://localhost:6379/0
 ```
 
-Or run the whole stack like production: `docker compose up --build`.
+Oppure esegui l'intero stack come in produzione: `docker compose up --build`.
 
-To receive real webhooks locally, expose port 8000 with a tunnel (for example `cloudflared tunnel --url http://localhost:8000`), set `PUBLIC_BASE_URL` and `ALLOWED_HOSTS` to the tunnel host, and use a Meta app in development mode with the Lead Ads Testing Tool.
+Per ricevere webhook reali in locale, esponi la porta 8000 con un tunnel (per esempio `cloudflared tunnel --url http://localhost:8000`), imposta `PUBLIC_BASE_URL` e `ALLOWED_HOSTS` sull'host del tunnel e usa un'app Meta in modalità sviluppo con il Lead Ads Testing Tool.
 
-## How the code is organized
+## Come è organizzato il codice
 
-![Architecture](docs/images/architecture-light.png)
+![Architettura](docs/images/architecture-light.png)
 
-| Path | What lives there |
+| Percorso | Cosa contiene |
 |---|---|
-| `leadhook/core/` | Encryption (`crypto.py`, `fields.py`), alerts, health/heartbeat, the wrong-key middleware |
-| `leadhook/meta/` | Meta app, page and form models; Graph API client (`graph.py`); webhook view; periodic page/form checks; setup wizard (`setup.py`) |
-| `leadhook/leads/` | Webhook events and leads; payload parsing; fetch and reconciliation; retention; admin dashboard |
-| `leadhook/routing/` | `resolve_destinations()` — form destinations, else page defaults |
-| `leadhook/destinations/` | Destinations and deliveries; payload/templating; outbound HTTP with SSRF guard; retries, leases and the sweeper |
-| `tests/` | One test module per source module, plus `test_end_to_end.py` |
-| `docs/superpowers/` | Design spec and implementation plans — read the spec before changing behavior |
+| `leadhook/core/` | Cifratura (`crypto.py`, `fields.py`), avvisi, health/heartbeat, il middleware per la chiave errata |
+| `leadhook/meta/` | Modelli di app Meta, pagine e form; client della Graph API (`graph.py`); view del webhook; controlli periodici di pagine e form; configurazione guidata (`setup.py`) |
+| `leadhook/leads/` | Eventi webhook e lead; parsing del payload; recupero e riconciliazione; conservazione dei dati; dashboard dell'admin |
+| `leadhook/routing/` | `resolve_destinations()`: destinazioni del form, altrimenti quelle predefinite della pagina |
+| `leadhook/destinations/` | Destinazioni e consegne; payload/template; HTTP in uscita con protezione SSRF; nuovi tentativi, lease e recupero del lavoro perso |
+| `tests/` | Un modulo di test per ogni modulo sorgente, più `test_end_to_end.py` |
+| `docs/superpowers/` | Specifica di progetto e piani di implementazione: leggi la specifica prima di cambiare un comportamento |
 
-The pipeline is `process_event → fetch_lead → route_lead → deliver`. Business logic lives in `services.py` modules; Celery tasks in `tasks.py` are thin wrappers that turn service outcomes into retries. Keep it that way: services are easy to test without Celery.
+La pipeline è `process_event → fetch_lead → route_lead → deliver`. La logica di business sta nei moduli `services.py`; i task Celery in `tasks.py` sono wrapper sottili che trasformano i risultati dei servizi in nuovi tentativi. Mantienilo così: i servizi sono facili da testare senza Celery.
 
-## Making a change
+## Fare una modifica
 
-1. Branch from `main`: `feat/<topic>`, `fix/<topic>`, `docs/<topic>` or `chore/<topic>`.
-2. **Write the failing test first**, then the code that makes it pass.
-3. Keep the change focused: one behavior per pull request. Refactors go in their own pull request.
-4. Run the full check before pushing:
+1. Crea un branch da `main`: `feat/<topic>`, `fix/<topic>`, `docs/<topic>` o `chore/<topic>`.
+2. **Scrivi prima il test che fallisce**, poi il codice che lo fa passare.
+3. Tieni la modifica mirata: un comportamento per pull request. I refactoring vanno in una pull request a parte.
+4. Esegui il controllo completo prima del push:
 
    ```bash
    uv run ruff format . && uv run ruff check . && uv run pytest
    DJANGO_SETTINGS_MODULE=tests.settings uv run python manage.py makemigrations --check --dry-run
    ```
 
-5. Commit with a [Conventional Commits](https://www.conventionalcommits.org/) style message, scoped by app when it helps:
+5. Fai commit con un messaggio in stile [Conventional Commits](https://www.conventionalcommits.org/), con lo scope dell'app quando aiuta:
 
    ```
    feat(destinations): support PATCH as delivery method
@@ -101,51 +102,51 @@ The pipeline is `process_event → fetch_lead → route_lead → deliver`. Busin
    docs: clarify Leads Access step
    ```
 
-6. Open the pull request and fill in the template. CI runs ruff, the tests on SQLite **and** PostgreSQL 16, and a Docker build; all three must be green.
+6. Apri la pull request e compila il template. La CI esegue ruff, i test su SQLite **e** PostgreSQL 16 e una build Docker; devono essere verdi tutti e tre.
 
-## Testing
+## Test
 
-Tests use `pytest`, `pytest-django` and `responses`. Things that save time:
+I test usano `pytest`, `pytest-django` e `responses`. Cose che fanno risparmiare tempo:
 
-- **Factories** in `tests/factories.py` (`make_meta_app`, `make_page`, `make_form`, `make_lead`, `make_destination`) create valid objects; override only what your test cares about.
-- **Fixtures** in `tests/fixtures.py` hold anonymized Graph API payloads and `sign()` for webhook signatures.
-- **No network.** Mock every Graph API and destination call with `responses`. A test that silently reaches the internet is a bug.
-- **DNS is faked** by the autouse `fake_dns` fixture: unknown hosts resolve to a public IP; map a host to a private one with `fake_dns["host"] = "10.0.0.1"`.
-- **Celery runs eagerly** (`CELERY_TASK_ALWAYS_EAGER`): calling a task runs it inline, and a retry raises `celery.exceptions.Retry`.
-- **Emails** land in the `mailoutbox` fixture; the cache (alert throttles, heartbeat) is cleared before each test.
-- **PostgreSQL:** CI runs every test on PostgreSQL too. Locally: `docker run -d -p 5432:5432 -e POSTGRES_USER=leadhook -e POSTGRES_PASSWORD=leadhook postgres:16-alpine` and `LEADHOOK_TEST_DATABASE_URL=postgres://leadhook:leadhook@localhost:5432/leadhook uv run pytest`.
-- When code guards against something (a race, a lost lease, a leaked secret), make sure the test **fails without the guard** — temporarily remove it and run the test once.
+- **Factory** in `tests/factories.py` (`make_meta_app`, `make_page`, `make_form`, `make_lead`, `make_destination`) creano oggetti validi; sovrascrivi solo ciò che interessa al tuo test.
+- **Fixture** in `tests/fixtures.py` contengono payload anonimizzati della Graph API e `sign()` per le firme dei webhook.
+- **Niente rete.** Simula ogni chiamata alla Graph API e alle destinazioni con `responses`. Un test che raggiunge internet senza dirlo è un bug.
+- **Il DNS è finto** grazie alla fixture autouse `fake_dns`: gli host sconosciuti si risolvono in un IP pubblico; per associare un host a un IP privato usa `fake_dns["host"] = "10.0.0.1"`.
+- **Celery gira in modo eager** (`CELERY_TASK_ALWAYS_EAGER`): chiamare un task lo esegue subito, e un nuovo tentativo solleva `celery.exceptions.Retry`.
+- **Le email** finiscono nella fixture `mailoutbox`; la cache (limitazione degli avvisi, heartbeat) viene svuotata prima di ogni test.
+- **PostgreSQL:** la CI esegue ogni test anche su PostgreSQL. In locale: `docker run -d -p 5432:5432 -e POSTGRES_USER=leadhook -e POSTGRES_PASSWORD=leadhook postgres:16-alpine` e `LEADHOOK_TEST_DATABASE_URL=postgres://leadhook:leadhook@localhost:5432/leadhook uv run pytest`.
+- Quando il codice si protegge da qualcosa (una race, un lease perso, un segreto trapelato), assicurati che il test **fallisca senza la protezione**: rimuovila temporaneamente ed esegui il test una volta.
 
-## Conventions
+## Convenzioni
 
-- **Logs, errors and alerts carry IDs only** — never names, emails, phone numbers or answers. Error messages must never contain tokens, app secrets, destination secrets or destination URL paths/queries (`redact_url()` and `GraphClient._redact()` exist for this).
-- **Secrets** are `EncryptedTextField`s and admin forms extend `SecretAwareModelForm`, so a blank field keeps the stored value.
-- **Retries and leases:** deliveries are claimed with a conditional `UPDATE` and saved only while the lease is held. Read `destinations/services.py` before touching delivery state.
-- **Everything periodic is idempotent:** running a beat task twice, or two copies at once, must not create duplicate leads or extra sends.
-- **Migrations** get a descriptive name: `makemigrations <app> --name <what_changed>`. Never edit a migration that is already on `main`.
-- **Comments explain *why*,** not what. A deliberate shortcut gets a `# shortcut: <limit>, <when to upgrade>` comment.
-- **Style** is whatever `ruff format` produces (line length 100). Don't add dependencies for a few lines of code.
+- **Log, errori e avvisi contengono solo ID**: mai nomi, email, numeri di telefono o risposte. I messaggi di errore non devono mai contenere token, app secret, chiavi segrete delle destinazioni o percorsi/query degli URL delle destinazioni (per questo esistono `redact_url()` e `GraphClient._redact()`).
+- **I segreti** sono `EncryptedTextField` e i form dell'admin estendono `SecretAwareModelForm`, così un campo lasciato vuoto mantiene il valore salvato.
+- **Nuovi tentativi e lease:** le consegne vengono prese in carico con un `UPDATE` condizionale e salvate solo finché si detiene il lease. Leggi `destinations/services.py` prima di toccare lo stato delle consegne.
+- **Tutto ciò che è periodico è idempotente:** eseguire un task di beat due volte, o due copie insieme, non deve creare lead duplicati né invii in più.
+- **Le migrazioni** hanno un nome descrittivo: `makemigrations <app> --name <what_changed>`. Non modificare mai una migrazione già presente su `main`.
+- **I commenti spiegano il *perché*,** non il cosa. Una scorciatoia voluta ha un commento `# shortcut: <limit>, <when to upgrade>`.
+- **Lo stile** è quello prodotto da `ruff format` (lunghezza riga 100). Non aggiungere dipendenze per poche righe di codice.
 
-## Recipes
+## Ricette
 
-**Add a periodic task**
+**Aggiungere un task periodico**
 
-1. Write the logic as a service function and test it directly.
-2. Add a thin `@shared_task` in the app's `tasks.py`.
-3. Add an entry to `CELERY_BEAT_SCHEDULE` in `leadhook/settings.py`; `tests/test_settings.py::test_beat_schedule_tasks_exist` checks it points to a real task.
-4. Mention it in the README's *Monitoring* section.
+1. Scrivi la logica come funzione di servizio e testala direttamente.
+2. Aggiungi un `@shared_task` sottile nel `tasks.py` dell'app.
+3. Aggiungi una voce a `CELERY_BEAT_SCHEDULE` in `leadhook/settings.py`; `tests/test_settings.py::test_beat_schedule_tasks_exist` verifica che punti a un task reale.
+4. Citalo nella sezione *Monitoraggio* del README.
 
-**Add a setting**
+**Aggiungere un'impostazione**
 
-Read it with `env(...)` in `leadhook/settings.py` with a safe default, document it in `.env.example` and in the README's *Configuration* table, and override it in tests with the `settings` fixture.
+Leggila con `env(...)` in `leadhook/settings.py` con un valore predefinito sicuro, documentala in `.env.example` e nella tabella *Configurazione* del README, e sovrascrivila nei test con la fixture `settings`.
 
-**Add an alert**
+**Aggiungere un avviso**
 
-Add a member to `AlertKind` in `leadhook/core/alerts.py` and call `send_alert()` from the service where the problem is detected. Alerts are throttled per kind, so put every affected ID in a single email instead of sending one per object.
+Aggiungi un membro ad `AlertKind` in `leadhook/core/alerts.py` e chiama `send_alert()` dal servizio in cui il problema viene rilevato. Gli avvisi sono limitati per tipo, quindi metti tutti gli ID coinvolti in una sola email invece di mandarne una per oggetto.
 
-**Update the architecture diagram**
+**Aggiornare il diagramma dell'architettura**
 
-The diagram in the README is generated with [Archify](https://github.com/tt-a1i/archify) from `docs/architecture.archify.json`. After changing components or flows, update the JSON (including the `sources` line ranges and `meta.repository.revision`), then:
+Il diagramma nel README è generato con [Archify](https://github.com/tt-a1i/archify) da `docs/architecture.archify.json`. Dopo aver cambiato componenti o flussi, aggiorna il JSON (compresi gli intervalli di righe di `sources` e `meta.repository.revision`), poi:
 
 ```bash
 node <archify>/bin/archify.mjs finalize architecture docs/architecture.archify.json \
@@ -154,14 +155,14 @@ node <archify>/bin/archify.mjs visual-check .archify/leadhook-architecture.html 
   --summary --require-provenance --out-dir .archify/visual-check
 ```
 
-Crop the 2048×1320 light and dark captures into `docs/images/architecture-{light,dark}.png`. `.archify/` is git-ignored.
+Ritaglia le catture chiara e scura a 2048×1320 in `docs/images/architecture-{light,dark}.png`. `.archify/` è ignorata da git.
 
-## Pull request checklist
+## Checklist della pull request
 
-- [ ] Tests cover the change and fail without it
-- [ ] `ruff format`, `ruff check`, `pytest` and `makemigrations --check` pass locally
-- [ ] No personal data or secrets in code, fixtures, logs or screenshots
-- [ ] User-visible changes are documented (README, `.env.example`, admin help text)
-- [ ] One focused change, with a Conventional Commits title
+- [ ] I test coprono la modifica e falliscono senza di essa
+- [ ] `ruff format`, `ruff check`, `pytest` e `makemigrations --check` passano in locale
+- [ ] Nessun dato personale o segreto in codice, fixture, log o screenshot
+- [ ] Le modifiche visibili all'utente sono documentate (README, `.env.example`, testi di aiuto dell'admin)
+- [ ] Una sola modifica mirata, con un titolo in stile Conventional Commits
 
-Thank you for contributing! 🪝
+Grazie per il tuo contributo! 🪝

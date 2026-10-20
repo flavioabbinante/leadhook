@@ -68,10 +68,10 @@ def source_choices(destination: Destination | None) -> list:
             key = source.removeprefix("answer:")
             if source.startswith("answer:") and key not in questions:
                 questions[key] = key
-                answers.append((source, f"{key} (non presente nei moduli collegati)"))
+                answers.append((source, f"{key} (non presente nei form collegati)"))
     return [
         ("", "---------"),
-        ("Risposte del modulo", answers),
+        ("Risposte del form", answers),
         (
             "Dati del lead",
             [(f"lead:{path}", label) for path, label in FieldMapping.LEAD_SOURCES.items()],

@@ -1,0 +1,28 @@
+# Italian strings Django's admin catalog does not translate yet.
+msgid ""
+msgstr ""
+"Language: it\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Choose %s by selecting them and then select the \"Choose\" arrow button."
+msgstr "Scegli %s selezionandoli e poi premi la freccia \"Scegli\"."
+
+msgid "Remove %s by selecting them and then select the \"Remove\" arrow button."
+msgstr "Rimuovi %s selezionandoli e poi premi la freccia \"Rimuovi\"."
+
+msgid "Choose all %s"
+msgstr "Scegli tutti: %s"
+
+msgid "Choose selected %s"
+msgstr "Scegli i selezionati: %s"
+
+msgid "Remove selected %s"
+msgstr "Rimuovi i selezionati: %s"
+
+msgid "Remove all %s"
+msgstr "Rimuovi tutti: %s"
+
+msgid "(click to clear)"
+msgstr "(clicca per svuotare)"

@@ -6,7 +6,7 @@ import re
 TEXT_LIMIT = 4096
 # Placeholder name -> (path in the standard payload, label); any other name is an answer key.
 LEAD_PLACEHOLDERS = {
-    "form": ("form.name", "Nome del modulo"),
+    "form": ("form.name", "Nome del form"),
     "page": ("page.name", "Pagina"),
     "campaign": ("campaign.name", "Campagna"),
     "adset": ("adset.name", "Gruppo di inserzioni"),
