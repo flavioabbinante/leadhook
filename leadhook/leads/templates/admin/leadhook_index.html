@@ -1,3 +1,6 @@
-{% extends "admin/index.html" %}
+{% extends "admin/base_site.html" %}
 {% load leadhook_dashboard %}
-{% block content %}{% leadhook_dashboard %}{{ block.super }}{% endblock %}
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block nav-breadcrumbs %}<nav aria-label="Breadcrumbs"><div class="breadcrumbs">LeadHook &rsaquo; Dashboard</div></nav>{% endblock %}
+{% block content_title %}{% endblock %}
+{% block content %}{% leadhook_dashboard %}{% endblock %}

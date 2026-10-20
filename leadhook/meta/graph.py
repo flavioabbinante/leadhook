@@ -2,18 +2,24 @@
 
 import json
 from datetime import datetime
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import requests
 
 from .models import MetaApp, Page
 
 GRAPH_BASE_URL = "https://graph.facebook.com"
+DIALOG_BASE_URL = "https://www.facebook.com"
+# Used when the app has no Facebook Login for Business configuration.
+LOGIN_SCOPES = (
+    "leads_retrieval,pages_manage_metadata,pages_show_list,pages_read_engagement,"
+    "pages_manage_ads,business_management"
+)
 LEAD_FIELDS = (
     "id,created_time,field_data,ad_id,ad_name,adset_id,adset_name,"
     "campaign_id,campaign_name,form_id,is_organic"
 )
-FORM_FIELDS = "id,name,locale,status"
+FORM_FIELDS = "id,name,locale,status,questions{key,label}"
 
 # https://developers.facebook.com/docs/graph-api/guides/error-handling
 TOKEN_ERROR_CODES = {190}
@@ -172,3 +178,56 @@ def debug_token(meta_app: MetaApp, token: str) -> dict:
 
 def app_subscriptions(meta_app: MetaApp) -> list[dict]:
     return app_client(meta_app).get_all(f"{node(meta_app.app_id)}/subscriptions")
+
+
+def login_dialog_url(meta_app: MetaApp, state: str) -> str:
+    params = {
+        "client_id": meta_app.app_id,
+        "redirect_uri": meta_app.login_redirect_url(),
+        "state": state,
+        "response_type": "code",
+    }
+    if meta_app.login_config_id:
+        params["config_id"] = meta_app.login_config_id
+    else:
+        params["scope"] = LOGIN_SCOPES
+    return f"{DIALOG_BASE_URL}/{meta_app.graph_version}/dialog/oauth?{urlencode(params)}"
+
+
+def exchange_login_code(meta_app: MetaApp, code: str) -> dict:
+    return app_client(meta_app, redact=(code,)).get(
+        "oauth/access_token",
+        {
+            "client_id": meta_app.app_id,
+            "client_secret": meta_app.app_secret,
+            "redirect_uri": meta_app.login_redirect_url(),
+            "code": code,
+        },
+    )
+
+
+def exchange_long_lived_token(meta_app: MetaApp, token: str) -> dict:
+    """Turn a one-hour user token into a ~60-day one (its page tokens then never expire)."""
+    return app_client(meta_app, redact=(token,)).get(
+        "oauth/access_token",
+        {
+            "grant_type": "fb_exchange_token",
+            "client_id": meta_app.app_id,
+            "client_secret": meta_app.app_secret,
+            "fb_exchange_token": token,
+        },
+    )
+
+
+def subscribe_app_webhook(meta_app: MetaApp) -> None:
+    """Point the app's Page webhook at LeadHook; Meta checks the callback URL right away."""
+    app_client(meta_app).post(
+        f"{node(meta_app.app_id)}/subscriptions",
+        {
+            "object": "page",
+            "callback_url": meta_app.webhook_url(),
+            "fields": "leadgen",
+            "verify_token": meta_app.verify_token,
+            "include_values": "true",
+        },
+    )

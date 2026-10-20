@@ -34,6 +34,15 @@ class MetaApp(models.Model):
     )
     token_expires_at = models.DateTimeField(null=True, blank=True)
     graph_version = models.CharField(max_length=16, default=default_graph_version)
+    login_config_id = models.CharField(
+        "Login configuration ID",
+        max_length=64,
+        blank=True,
+        help_text=(
+            "Facebook Login for Business → Configurations. Choose a configuration with a "
+            "System-user access token so the connection never expires."
+        ),
+    )
 
     class Meta:
         verbose_name = "Meta app"
@@ -43,6 +52,10 @@ class MetaApp(models.Model):
 
     def webhook_url(self) -> str:
         return settings.PUBLIC_BASE_URL + reverse("meta-webhook", args=[self.webhook_uuid])
+
+    @staticmethod
+    def login_redirect_url() -> str:
+        return settings.PUBLIC_BASE_URL + reverse("facebook-callback")
 
 
 class Page(models.Model):
@@ -74,6 +87,9 @@ class Form(models.Model):
     status = models.CharField(max_length=32, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
     last_reconciled_at = models.DateTimeField(null=True, blank=True)
+    questions = models.JSONField(
+        default=list, blank=True, help_text="The form's questions as Meta lists them (key, label)."
+    )
     destinations = models.ManyToManyField(
         "destinations.Destination",
         blank=True,

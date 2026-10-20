@@ -21,7 +21,13 @@ GRAPH_LEAD = {
     "is_organic": False,
 }
 
-GRAPH_FORM = {"id": "222", "name": "Energy offer", "locale": "en_US", "status": "ACTIVE"}
+GRAPH_FORM = {
+    "id": "222",
+    "name": "Energy offer",
+    "locale": "en_US",
+    "status": "ACTIVE",
+    "questions": [{"key": "full_name", "label": "Full name", "type": "FULL_NAME"}],
+}
 
 
 def leadgen_payload(leadgen_id: str = "333", page_id: str = "111", form_id: str = "222") -> dict:

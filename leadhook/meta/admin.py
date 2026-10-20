@@ -41,8 +41,14 @@ class MetaAppAdmin(admin.ModelAdmin):
     list_display = ("name", "app_id", "token_type", "graph_version")
     readonly_fields = ("callback_url", "verify_token")
     fieldsets = (
-        (None, {"fields": ("name", "app_id", "app_secret", "graph_version")}),
-        ("Access token", {"fields": ("access_token", "token_type", "token_expires_at")}),
+        (None, {"fields": ("name", "app_id", "app_secret", "graph_version", "login_config_id")}),
+        (
+            "Access token",
+            {
+                "fields": ("access_token", "token_type", "token_expires_at"),
+                "description": "Filled in by “Connect with Facebook” in the setup.",
+            },
+        ),
         (
             "Webhook setup",
             {

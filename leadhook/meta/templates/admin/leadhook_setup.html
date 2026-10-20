@@ -1,67 +1,105 @@
 {% extends "admin/base_site.html" %}
 {% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> › Set up</div>{% endblock %}
 {% block content %}
-<div id="content-main">
-<ol>
-  <li>
-    <h2>✔ Admin user</h2>
-    <p>You are signed in as {{ request.user.get_username }}.</p>
+<div id="content-main" class="lh-narrow">
+<ol class="lh-steps">
+  <li class="lh-card lh-step is-done">
+    <span class="lh-step-number"><svg aria-hidden="true"><use href="#lh-check"></use></svg></span>
+    <div>
+      <h2>Admin user</h2>
+      <p>You are signed in as {{ request.user.get_username }}.</p>
+    </div>
   </li>
-  <li>
-    <h2>{% if has_app %}✔{% else %}○{% endif %} Meta app</h2>
-    <p>Enter the App ID, App secret and a System User access token. The README's
-      “Meta app setup” section explains how to create them.</p>
-    {% if meta_app %}
-      <p><a class="button" href="{% url 'admin:meta_metaapp_change' meta_app.pk %}">Edit {{ meta_app.name }}</a></p>
-    {% else %}
-      <p><a class="button" href="{% url 'admin:meta_metaapp_add' %}">Add the Meta app</a></p>
-    {% endif %}
+  <li class="lh-card lh-step{% if has_app %} is-done{% endif %}">
+    <span class="lh-step-number">{% if has_app %}<svg aria-hidden="true"><use href="#lh-check"></use></svg>{% else %}2{% endif %}</span>
+    <div>
+      <h2>Connect with Facebook</h2>
+      {% if has_app %}
+        <p>Connected{% if meta_app.token_expires_at %} until {{ meta_app.token_expires_at|date:"j M Y" }}: connect again before then{% else %}, the connection does not expire{% endif %}.</p>
+        <div class="lh-actions">
+          <a class="lh-btn lh-btn-outline" href="{% url 'facebook-login' %}">Connect again</a>
+          <a class="lh-btn lh-btn-light" href="{% url 'admin:meta_metaapp_change' meta_app.pk %}">Meta app settings</a>
+        </div>
+      {% else %}
+        <p>LeadHook logs in through your own Meta app. Once only:
+          <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">create a <strong>Business</strong> app</a>,
+          add <strong>Facebook Login for Business</strong> and <strong>Webhooks</strong>, and in
+          Facebook Login for Business → Settings add this redirect URI:</p>
+        <dl class="lh-kv"><dt>Valid OAuth Redirect URI</dt><dd><code>{{ login_redirect_url }}</code></dd></dl>
+        <p>Then paste the App ID and App secret (App settings → Basic):</p>
+        <form method="post" class="lh-connect">
+          {% csrf_token %}
+          {% for field in app_form %}
+            <label class="lh-field"><span>{{ field.label }}</span>{{ field }}{{ field.errors }}{% if field.help_text %}<small class="lh-muted">{{ field.help_text }}</small>{% endif %}</label>
+          {% endfor %}
+          <button class="lh-btn lh-btn-primary" type="submit" name="action" value="save_app">Save and connect with Facebook</button>
+        </form>
+      {% endif %}
+      {% if meta_app %}
+      <details class="lh-details">
+        <summary>Webhook values, to set it up by hand</summary>
+        <p>In the Meta app open <strong>Webhooks</strong>, choose <strong>Page</strong>,
+          subscribe with these values, then subscribe to the <code>leadgen</code> field.</p>
+        <dl class="lh-kv">
+          <dt>Callback URL</dt><dd><code>{{ meta_app.webhook_url }}</code></dd>
+          <dt>Verify token</dt><dd><code>{{ meta_app.verify_token }}</code></dd>
+        </dl>
+        <form method="post">{% csrf_token %}<button class="lh-btn lh-btn-outline" type="submit" name="action" value="verify">Verify</button></form>
+      </details>
+      {% endif %}
+    </div>
   </li>
   {% if meta_app %}
-  <li>
-    <h2>Webhook</h2>
-    <p>In the Meta app dashboard open <strong>Webhooks</strong>, choose <strong>Page</strong>,
-      subscribe with these values, then subscribe to the <code>leadgen</code> field.</p>
-    <p>Callback URL: <code>{{ meta_app.webhook_url }}</code><br>
-      Verify token: <code>{{ meta_app.verify_token }}</code></p>
-    <form method="post">{% csrf_token %}<button type="submit" name="action" value="verify">Verify</button></form>
+  <li class="lh-card lh-step{% if has_pages %} is-done{% endif %}" id="pages">
+    <span class="lh-step-number">{% if has_pages %}<svg aria-hidden="true"><use href="#lh-check"></use></svg>{% else %}3{% endif %}</span>
+    <div>
+      <h2>Pages</h2>
+      {% if available_pages is not None %}
+        <form method="post">{% csrf_token %}
+          {% for page in available_pages %}
+            <label class="lh-page-choice"><input type="checkbox" name="page_ids" value="{{ page.id }}"{% if page.connected %} checked{% endif %}>
+              <span class="lh-avatar">{{ page.name|default:page.id|first|upper }}</span>
+              <span>{{ page.name }} <small class="lh-muted">({{ page.id }})</small></span></label>
+          {% empty %}
+            <p>No pages are reachable with this token. Assign pages to the System User in Business Settings.</p>
+          {% endfor %}
+          <p></p>
+          <button class="lh-btn lh-btn-primary" type="submit" name="action" value="connect_pages">Connect selected pages</button>
+        </form>
+      {% else %}
+        <p>Connecting a page subscribes it to lead events and loads its forms.</p>
+        <form method="post">{% csrf_token %}<button class="lh-btn lh-btn-dark" type="submit" name="action" value="load_pages">Load pages</button></form>
+      {% endif %}
+    </div>
   </li>
-  <li>
-    <h2>{% if has_pages %}✔{% else %}○{% endif %} Pages</h2>
-    {% if available_pages is not None %}
-      <form method="post">{% csrf_token %}
-        {% for page in available_pages %}
-          <p><label><input type="checkbox" name="page_ids" value="{{ page.id }}"{% if page.connected %} checked{% endif %}>
-            {{ page.name }} ({{ page.id }})</label></p>
-        {% empty %}
-          <p>No pages are reachable with this token. Assign pages to the System User in Business Settings.</p>
-        {% endfor %}
-        <button type="submit" name="action" value="connect_pages">Connect selected pages</button>
-      </form>
-    {% else %}
-      <p>Connecting a page subscribes it to lead events and loads its forms.</p>
-      <form method="post">{% csrf_token %}<button type="submit" name="action" value="load_pages">Load pages</button></form>
-    {% endif %}
+  <li class="lh-card lh-step{% if has_destination %} is-done{% endif %}">
+    <span class="lh-step-number">{% if has_destination %}<svg aria-hidden="true"><use href="#lh-check"></use></svg>{% else %}4{% endif %}</span>
+    <div>
+      <h2>Destination</h2>
+      <p>Create a destination (for example your n8n webhook), then connect it to a page or a form in Routing.</p>
+      <div class="lh-actions">
+        <a class="lh-btn lh-btn-primary" href="{% url 'admin:destinations_destination_add' %}">Add a destination</a>
+        <a class="lh-btn lh-btn-outline" href="{% url 'routing' %}">Connect it in Routing</a>
+      </div>
+    </div>
   </li>
-  <li>
-    <h2>{% if has_destination %}✔{% else %}○{% endif %} Destination</h2>
-    <p>Create a destination (for example your n8n webhook), then pick it as a page default or on a form.</p>
-    <p><a class="button" href="{% url 'admin:destinations_destination_add' %}">Add a destination</a>
-      <a class="button" href="{% url 'admin:meta_page_changelist' %}">Set page defaults</a></p>
-  </li>
-  <li>
-    <h2>{% if has_lead %}✔{% else %}○{% endif %} Test lead</h2>
-    {% if forms %}
-      <form method="post">{% csrf_token %}
-        <label for="form_id">Form</label>
-        <select name="form_id" id="form_id">
-          {% for form in forms %}<option value="{{ form.form_id }}">{{ form.page.name }} — {{ form }}</option>{% endfor %}
-        </select>
-        <button type="submit" name="action" value="test_lead">Send test lead</button>
-      </form>
-    {% else %}
-      <p>Connect a page first.</p>
-    {% endif %}
+  <li class="lh-card lh-step{% if has_lead %} is-done{% endif %}" id="test-lead">
+    <span class="lh-step-number">{% if has_lead %}<svg aria-hidden="true"><use href="#lh-check"></use></svg>{% else %}5{% endif %}</span>
+    <div>
+      <h2>Test lead</h2>
+      {% if forms %}
+        <p>Meta creates a test lead on the form and sends the webhook, so it travels the whole pipeline.</p>
+        <form method="post" class="lh-actions">{% csrf_token %}
+          <label for="form_id" class="lh-muted">Form</label>
+          <select name="form_id" id="form_id">
+            {% for form in forms %}<option value="{{ form.form_id }}">{{ form.page.name }} — {{ form }}</option>{% endfor %}
+          </select>
+          <button class="lh-btn lh-btn-primary" type="submit" name="action" value="test_lead">Send test lead</button>
+        </form>
+      {% else %}
+        <p>Connect a page first.</p>
+      {% endif %}
+    </div>
   </li>
   {% endif %}
 </ol>

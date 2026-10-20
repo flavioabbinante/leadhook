@@ -2,12 +2,15 @@
 
 from django.contrib import messages
 from django.contrib.admin import site
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.html import format_html
 
+from leadhook.core.admin_forms import SecretAwareModelForm
+from leadhook.core.models import get_default_workspace
 from leadhook.destinations.models import Destination
 from leadhook.leads.models import Lead
 
@@ -18,10 +21,19 @@ from .services import connect_page
 TEMPLATE = "admin/leadhook_setup.html"
 
 
+class AppCredentialsForm(SecretAwareModelForm):
+    secret_fields = ("app_secret",)
+
+    class Meta:
+        model = MetaApp
+        fields = ("app_id", "app_secret")
+
+
 def setup_status() -> dict:
     meta_app = MetaApp.objects.order_by("pk").first()
     return {
         "meta_app": meta_app,
+        "has_credentials": bool(meta_app and meta_app.app_id and meta_app.app_secret),
         "has_app": bool(meta_app and meta_app.access_token),
         "has_pages": Page.objects.filter(subscribed=True).exists(),
         "has_destination": Destination.objects.filter(active=True)
@@ -43,12 +55,24 @@ def setup_view(request):
         **site.each_context(request),
         **status,
         "title": "Set up LeadHook",
+        "login_redirect_url": MetaApp.login_redirect_url(),
         "available_pages": None,
         "forms": Form.objects.filter(page__subscribed=True)
         .select_related("page")
         .order_by("page__name", "name"),
     }
-    if request.method == "POST" and meta_app is not None:
+    app_form = AppCredentialsForm(instance=meta_app)
+    if request.method == "POST" and request.POST.get("action") == "save_app":
+        if not request.user.has_perm(
+            "meta.add_metaapp" if meta_app is None else "meta.change_metaapp"
+        ):
+            raise PermissionDenied
+        instance = meta_app or MetaApp(workspace=get_default_workspace(), name="Meta app")
+        app_form = AppCredentialsForm(request.POST, instance=instance)
+        if app_form.is_valid():
+            app_form.save()
+            return redirect("facebook-login")
+    elif request.method == "POST" and meta_app is not None:
         action = request.POST.get("action")
         if action == "verify":
             _verify_webhook(request, meta_app)
@@ -61,6 +85,10 @@ def setup_view(request):
         elif action == "test_lead":
             _send_test_lead(request, request.POST.get("form_id", ""))
         return redirect("setup")
+    context["app_form"] = app_form
+    if request.GET.get("load") == "pages" and status["has_app"]:
+        # Straight after “Connect with Facebook”: show the pages without another click.
+        context["available_pages"] = _load_pages(request, meta_app)
     return TemplateResponse(request, TEMPLATE, context)
 
 
