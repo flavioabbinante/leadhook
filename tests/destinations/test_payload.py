@@ -72,7 +72,7 @@ def test_render_body_uses_field_mappings():
     lead = make_lead(data={"full_name": "Jane Van Doe", "phone": "+39 333 1234567"})
     context, delivery = _context(lead)
     destination = delivery.destination
-    _map(destination, "commessa_id", FieldMapping.FIXED, fixed_value="51")
+    _map(destination, "campaign_code", FieldMapping.FIXED, fixed_value="7")
     _map(destination, "channel", FieldMapping.FIXED, fixed_value="Web")
     _map(destination, "fields.nome", "answer:full_name", transform="first_word")
     _map(destination, "fields.cognome", "answer:full_name", transform="rest_words")
@@ -80,7 +80,7 @@ def test_render_body_uses_field_mappings():
     _map(destination, "fields.missing", "answer:city")
     _map(destination, "campaign", "lead:campaign.name")
     assert json.loads(render_body(destination, context)) == {
-        "commessa_id": 51,
+        "campaign_code": 7,
         "channel": "Web",
         "fields": {"nome": "Jane", "cognome": "Van Doe", "cell": "3331234567", "missing": ""},
         "campaign": "Campaign 1",
