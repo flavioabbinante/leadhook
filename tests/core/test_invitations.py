@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.messages import get_messages
 from django.core import mail
@@ -25,7 +26,7 @@ def test_invitation_is_emailed_and_creates_a_staff_user(admin_client, client):
     invitation = Invitation.objects.get()
     assert invitation.token_hash not in link  # only the hash is stored
 
-    path = link.removeprefix("http://localhost:8000")
+    path = link.removeprefix(settings.PUBLIC_BASE_URL)
     assert "new@example.com" in client.get(path).content.decode()
     response = client.post(
         path, {"username": "maria", "password1": "a-long-pass-123", "password2": "a-long-pass-123"}
@@ -45,7 +46,7 @@ def test_invitation_is_emailed_and_creates_a_staff_user(admin_client, client):
 
 
 def test_full_access_invitation_creates_superuser(admin_client, client):
-    path = _invite(admin_client, is_superuser="on").removeprefix("http://localhost:8000")
+    path = _invite(admin_client, is_superuser="on").removeprefix(settings.PUBLIC_BASE_URL)
     client.post(
         path, {"username": "boss", "password1": "a-long-pass-123", "password2": "a-long-pass-123"}
     )
@@ -53,7 +54,7 @@ def test_full_access_invitation_creates_superuser(admin_client, client):
 
 
 def test_expired_or_unknown_invitation_is_rejected(admin_client, client):
-    path = _invite(admin_client).removeprefix("http://localhost:8000")
+    path = _invite(admin_client).removeprefix(settings.PUBLIC_BASE_URL)
     Invitation.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
     assert client.get(path).status_code == 410
     assert client.get("/invite/not-a-token/").status_code == 410

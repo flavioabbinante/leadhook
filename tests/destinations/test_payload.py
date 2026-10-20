@@ -1,8 +1,11 @@
 import json
 from datetime import UTC, datetime
 
-from leadhook.destinations.models import Delivery
+import pytest
+
+from leadhook.destinations.models import Delivery, FieldMapping
 from leadhook.destinations.payload import build_context, render_body
+from leadhook.destinations.templating import TemplateError
 from tests.factories import make_destination, make_lead
 
 SENT_AT = datetime(2026, 10, 15, 8, 30, 4, tzinfo=UTC)
@@ -59,3 +62,41 @@ def test_render_body_uses_custom_template():
     context, delivery = _context()
     delivery.destination.payload_template = '{"name": {{ data.full_name | tojson }}}'
     assert json.loads(render_body(delivery.destination, context)) == {"name": "Jane Doe"}
+
+
+def _map(destination, target, source, **kwargs):
+    FieldMapping.objects.create(destination=destination, target=target, source=source, **kwargs)
+
+
+def test_render_body_uses_field_mappings():
+    lead = make_lead(data={"full_name": "Jane Van Doe", "phone": "+39 333 1234567"})
+    context, delivery = _context(lead)
+    destination = delivery.destination
+    _map(destination, "commessa_id", FieldMapping.FIXED, fixed_value="51")
+    _map(destination, "channel", FieldMapping.FIXED, fixed_value="Web")
+    _map(destination, "fields.nome", "answer:full_name", transform="first_word")
+    _map(destination, "fields.cognome", "answer:full_name", transform="rest_words")
+    _map(destination, "fields.cell", "answer:phone", transform="strip_plus39")
+    _map(destination, "fields.missing", "answer:city")
+    _map(destination, "campaign", "lead:campaign.name")
+    assert json.loads(render_body(destination, context)) == {
+        "commessa_id": 51,
+        "channel": "Web",
+        "fields": {"nome": "Jane", "cognome": "Van Doe", "cell": "3331234567", "missing": ""},
+        "campaign": "Campaign 1",
+    }
+
+
+def test_template_wins_over_field_mappings():
+    context, delivery = _context()
+    delivery.destination.payload_template = '{"a": 1}'
+    _map(delivery.destination, "b", FieldMapping.FIXED, fixed_value="2")
+    assert json.loads(render_body(delivery.destination, context)) == {"a": 1}
+
+
+def test_clashing_field_mappings_raise():
+    context, delivery = _context()
+    _map(delivery.destination, "fields", FieldMapping.FIXED, fixed_value="x")
+    _map(delivery.destination, "fields.email", "answer:email")
+    with pytest.raises(TemplateError):
+        render_body(delivery.destination, context)

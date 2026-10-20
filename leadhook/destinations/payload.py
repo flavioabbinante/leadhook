@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 
 from leadhook.leads.models import Lead
 
-from .models import Delivery, Destination
-from .templating import render_payload
+from .models import Delivery, Destination, FieldMapping
+from .templating import TemplateError, _first_word, _phone_strip_prefix, _rest_words, render_payload
 
 PAYLOAD_VERSION = 1
 
@@ -48,4 +48,49 @@ def build_context(lead: Lead, delivery: Delivery, *, attempt: int, sent_at: date
 def render_body(destination: Destination, context: dict) -> str:
     if destination.payload_template.strip():
         return render_payload(destination.payload_template, context)
+    mappings = list(destination.field_mappings.all())
+    if mappings:
+        return json.dumps(build_mapped_body(mappings, context), ensure_ascii=False)
     return json.dumps(context, ensure_ascii=False)
+
+
+TRANSFORMS = {
+    FieldMapping.Transform.FIRST_WORD: _first_word,
+    FieldMapping.Transform.REST_WORDS: _rest_words,
+    FieldMapping.Transform.STRIP_PLUS39: lambda value: _phone_strip_prefix(value, "+39"),
+}
+
+
+def build_mapped_body(mappings: list[FieldMapping], context: dict) -> dict:
+    """The payload described by field mappings; dotted names become nested objects."""
+    body: dict = {}
+    for mapping in mappings:
+        *parents, leaf = mapping.target.split(".")
+        node = body
+        for part in parents:
+            node = node.setdefault(part, {})
+            if not isinstance(node, dict):
+                raise TemplateError(f"Field {mapping.target} clashes with field {part}.")
+        if leaf in node:
+            raise TemplateError(f"Field {mapping.target} is set twice.")
+        node[leaf] = _mapped_value(mapping, context)
+    return body
+
+
+def _mapped_value(mapping: FieldMapping, context: dict):
+    if mapping.source == FieldMapping.FIXED:
+        try:
+            value = json.loads(mapping.fixed_value)
+        except ValueError:
+            return mapping.fixed_value
+        return value if isinstance(value, int | float | bool) else mapping.fixed_value
+    kind, _, key = mapping.source.partition(":")
+    value = ""
+    if kind == "answer":
+        value = context["data"].get(key, "")
+    elif kind == "lead":
+        value = context
+        for part in key.split("."):
+            value = value.get(part, "") if isinstance(value, dict) else ""
+    transform = TRANSFORMS.get(mapping.transform)
+    return transform(value) if transform else value

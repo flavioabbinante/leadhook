@@ -24,6 +24,7 @@ def test_sync_page_forms_creates_and_refreshes_forms():
     refreshed = Form.objects.get(form_id="222")
     assert (refreshed.name, refreshed.status) == ("Energy offer", "ACTIVE")
     assert refreshed.last_synced_at is not None
+    assert refreshed.questions == [{"key": "full_name", "label": "Full name"}]
     assert Form.objects.get(form_id="999").page == page
 
 
