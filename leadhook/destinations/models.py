@@ -1,3 +1,5 @@
+import re
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -18,9 +20,15 @@ def _header_text_problem(value: str) -> str | None:
     return None
 
 
+TELEGRAM_API = "https://api.telegram.org"
+TELEGRAM_TOKEN = re.compile(r"\d+:[A-Za-z0-9_-]+")
+TELEGRAM_CHAT_ID = re.compile(r"-?\d+|@[A-Za-z0-9_]{5,}")
+
+
 class Destination(models.Model):
     class Kind(models.TextChoices):
         WEBHOOK = "webhook", "Webhook"
+        TELEGRAM = "telegram", "Telegram message"
 
     class Method(models.TextChoices):
         POST = "POST", "POST"
@@ -35,7 +43,7 @@ class Destination(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="destinations")
     name = models.CharField(max_length=200)
     kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.WEBHOOK)
-    url = models.URLField("URL", max_length=2000)
+    url = models.URLField("URL", max_length=2000, blank=True)
     method = models.CharField(max_length=8, choices=Method.choices, default=Method.POST)
     auth_type = models.CharField(max_length=16, choices=AuthType.choices, default=AuthType.NONE)
     auth_header_name = models.CharField(
@@ -43,7 +51,24 @@ class Destination(models.Model):
     )
     secret = EncryptedTextField(
         blank=True,
-        help_text="Header value, bearer token or HMAC key, depending on authentication.",
+        help_text=(
+            "Header value, bearer token or HMAC key, depending on authentication. "
+            "For Telegram: the bot token from @BotFather."
+        ),
+    )
+    message_template = models.TextField(
+        "Message",
+        blank=True,
+        help_text=(
+            "Markdown: **bold**, _italic_, `code`, [link](https://…), # title, - list. "
+            "Click a field below to insert it. Empty sends every answer."
+        ),
+    )
+    telegram_chat_id = models.CharField(
+        "Telegram chat ID",
+        max_length=64,
+        blank=True,
+        help_text="The chat, group or channel that receives the message, e.g. -1001234567890.",
     )
     extra_headers = models.JSONField(
         default=dict,
@@ -72,8 +97,30 @@ class Destination(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def is_telegram(self) -> bool:
+        return self.kind == self.Kind.TELEGRAM
+
+    def endpoint_url(self) -> str:
+        if self.is_telegram:
+            return f"{TELEGRAM_API}/bot{self.secret}/sendMessage"
+        return self.url
+
     def clean(self) -> None:
         errors: dict[str, str] = {}
+        if self.is_telegram:
+            # The token goes in the URL path: only the BotFather format is accepted.
+            if not TELEGRAM_TOKEN.fullmatch(self.secret or ""):
+                errors["secret"] = "Paste the bot token from @BotFather, e.g. 123456:ABC-def."
+            if not TELEGRAM_CHAT_ID.fullmatch(self.telegram_chat_id):
+                errors["telegram_chat_id"] = "A number like 123456789 or -1001234567890, or @name."
+            self.method = self.Method.POST
+            self.auth_type = self.AuthType.NONE
+            if errors:
+                raise ValidationError(errors)
+            return
+        if not self.url:
+            errors["url"] = "Required for a webhook."
         if self.auth_type == self.AuthType.HEADER and not self.auth_header_name:
             errors["auth_header_name"] = "Required for custom header authentication."
         if self.auth_type != self.AuthType.NONE and not self.secret:

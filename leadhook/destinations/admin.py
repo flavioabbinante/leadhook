@@ -4,6 +4,7 @@ from functools import partial
 from django import forms
 from django.contrib import admin
 from django.db.models import Q
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
@@ -16,6 +17,7 @@ from .models import Delivery, Destination, FieldMapping
 from .payload import build_context, render_body
 from .services import reset_for_resend
 from .tasks import deliver
+from .telegram import LEAD_PLACEHOLDERS
 from .templating import TemplateError
 
 
@@ -33,12 +35,9 @@ class DestinationForm(SecretAwareModelForm):
         }
 
 
-def source_choices(destination: Destination | None) -> list:
-    """Dropdown of the Value column: form questions, lead details and a fixed value.
-
-    Questions come from the forms routed to the destination, or from every form while none is.
-    """
-    forms_with_questions = Form.objects.exclude(questions=[])
+def routed_forms(destination: Destination | None):
+    """Forms with questions routed to the destination, or every such form while none is."""
+    forms_with_questions = Form.objects.exclude(questions=[]).order_by("name")
     if destination is not None:
         # Same rule as routing: a form's own destinations replace its page's defaults.
         routed = forms_with_questions.filter(
@@ -46,11 +45,22 @@ def source_choices(destination: Destination | None) -> list:
             | Q(page__default_destinations=destination, destinations=None)
         ).distinct()
         if routed.exists():
-            forms_with_questions = routed
+            return routed
+    return forms_with_questions
+
+
+def routed_questions(destination: Destination | None) -> dict[str, str]:
+    """{key: label} of the questions of the routed forms."""
     questions: dict[str, str] = {}
-    for form in forms_with_questions.only("questions"):
+    for form in routed_forms(destination).only("questions"):
         for question in form.questions:
             questions.setdefault(question["key"], question["label"])
+    return questions
+
+
+def source_choices(destination: Destination | None) -> list:
+    """Dropdown of the Value column: form questions, lead details and a fixed value."""
+    questions = routed_questions(destination)
     answers = [(f"answer:{key}", f"{label} ({key})") for key, label in sorted(questions.items())]
     if destination is not None:
         # Keep saved answers selectable even when no routed form asks them any more.
@@ -93,23 +103,46 @@ class FieldMappingInline(admin.TabularInline):
 @admin.register(Destination)
 class DestinationAdmin(admin.ModelAdmin):
     form = DestinationForm
-    list_display = ("name", "url", "auth_type", "active")
-    list_filter = ("active", "auth_type")
+    list_display = ("name", "kind", "url", "active")
+    list_filter = ("active", "kind")
     search_fields = ("name", "url")
-    readonly_fields = ("payload_preview",)
+    readonly_fields = ("payload_preview", "message_fields")
     inlines = (FieldMappingInline,)
     fieldsets = (
-        (None, {"fields": ("name", "kind", "url", "method", "active")}),
-        ("Authentication", {"fields": ("auth_type", "auth_header_name", "secret")}),
+        (None, {"fields": ("name", "kind", "active")}),
+        (
+            "Webhook",
+            {
+                "classes": ("lh-kind-webhook",),
+                "fields": ("url", "method", "auth_type", "auth_header_name"),
+            },
+        ),
+        (
+            "Telegram",
+            {
+                "classes": ("lh-kind-telegram",),
+                "fields": ("telegram_chat_id", "message_template", "message_fields"),
+                "description": (
+                    "1. Create a bot with @BotFather and paste its token in Bot token.<br>"
+                    "2. Add the bot to the chat or group and send it a message.<br>"
+                    "3. Open api.telegram.org/bot&lt;token&gt;/getUpdates and copy chat.id here."
+                ),
+            },
+        ),
+        ("Secret", {"fields": ("secret",)}),
         ("Preview", {"fields": ("payload_preview",)}),
         (
             "Advanced",
             {
-                "classes": ("collapse",),
+                "classes": ("collapse", "lh-kind-webhook"),
                 "fields": ("payload_template", "extra_headers", "success_condition", "timeout_s"),
             },
         ),
     )
+
+    class Media:
+        # Shows only the sections of the chosen kind and authentication.
+        js = ("leadhook/destination_form.js",)
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -122,6 +155,17 @@ class DestinationAdmin(admin.ModelAdmin):
             # Per request: the admin instance is shared between threads.
             obj._preview_lead_id = request.GET.get("preview_lead")
         return obj
+
+    @admin.display(description="Insert a field")
+    def message_fields(self, obj: Destination):
+        forms = list(routed_forms(obj if obj.pk else None))
+        return render_to_string(
+            "admin/leadhook_message_fields.html",
+            {
+                "forms": forms,
+                "details": [(name, label) for name, (_, label) in LEAD_PLACEHOLDERS.items()],
+            },
+        )
 
     @admin.display(description="Payload preview")
     def payload_preview(self, obj: Destination):

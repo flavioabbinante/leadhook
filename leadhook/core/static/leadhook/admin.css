@@ -796,3 +796,56 @@ html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3
 .lh-details { margin-top: 14px; }
 .lh-details summary { cursor: pointer; color: var(--lh-muted); font-weight: 600; font-size: 13px; }
 .lh-details[open] summary { margin-bottom: 10px; }
+
+/* Lead pipeline: n8n-style nodes joined by edges, deliveries as parallel branches. */
+.lh-flow { display: flex; align-items: center; padding: 8px 0; overflow-x: auto; }
+.lh-flow-node {
+  display: flex; flex-direction: column; gap: 4px; flex: none; width: 150px; padding: 12px;
+  background: var(--lh-surface); border: 2px solid var(--lh-line); border-radius: var(--lh-radius-sm);
+  box-shadow: var(--lh-shadow-sm); color: var(--lh-text); text-decoration: none;
+}
+a.lh-flow-node:hover { border-color: var(--lh-orange); text-decoration: none; }
+.lh-flow-node strong { color: var(--body-loud-color); font-size: 13px; overflow-wrap: anywhere; }
+.lh-flow-detail { font-size: 12px; color: var(--lh-muted); overflow-wrap: anywhere; }
+.lh-flow-time { font-size: 11px; color: var(--lh-muted); }
+.lh-flow-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  border-radius: 8px; color: #fff; background: var(--lh-muted);
+}
+.lh-flow-icon svg { width: 16px; height: 16px; }
+.lh-flow-done { border-color: var(--lh-green); }
+.lh-flow-done .lh-flow-icon { background: var(--lh-green); }
+.lh-flow-error { border-color: var(--lh-red); }
+.lh-flow-error .lh-flow-icon { background: var(--lh-red); }
+.lh-flow-pending { border-style: dashed; }
+.lh-flow-pending .lh-flow-icon { background: var(--lh-amber); }
+.lh-flow-edge { flex: none; width: 24px; height: 2px; background: var(--lh-track); }
+.lh-flow-branches { display: flex; flex-direction: column; gap: 10px; padding-left: 14px; border-left: 2px solid var(--lh-track); }
+@media (max-width: 767px) {
+  .lh-flow { flex-direction: column; align-items: stretch; }
+  .lh-flow-node { width: auto; }
+  .lh-flow-edge { width: 2px; height: 18px; margin-left: 28px; }
+}
+
+/* Sections hidden by page scripts must stay hidden over display rules. */
+.lh-shell [hidden] { display: none !important; }
+.lh-shell fieldset.module > .description { padding: 0 20px 10px; line-height: 1.7; }
+.lh-chip {
+  display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px; border: 1px solid var(--lh-line);
+  border-radius: 999px; background: var(--lh-surface); color: var(--lh-text); font-size: 12px; cursor: pointer;
+}
+.lh-chip:hover { border-color: var(--lh-orange); color: var(--lh-orange); }
+.lh-insert { display: flex; flex-direction: column; gap: 10px; }
+.lh-insert-row { display: flex; align-items: flex-start; gap: 12px; }
+.lh-insert-label { flex: none; width: 44px; padding-top: 5px; font-size: 12px; font-weight: 700; color: var(--lh-muted); }
+.lh-chips[data-form] { padding-left: 56px; }
+/* Placeholder highlight: a mirrored layer behind a transparent-background textarea. */
+.lh-highlight { position: relative; display: inline-block; max-width: 100%; }
+.lh-highlight textarea { position: relative; background: transparent !important; z-index: 1; }
+.lh-highlight-backdrop {
+  position: absolute; top: 0; left: 0; overflow: hidden; border-color: transparent;
+  border-radius: var(--lh-radius-sm); background: var(--lh-surface); color: transparent;
+  white-space: pre-wrap; overflow-wrap: break-word;
+}
+.lh-highlight-backdrop mark { color: transparent; background: rgba(242, 105, 42, 0.25); border-radius: 4px; }
+.lh-highlight-backdrop mark.lh-unknown { background: rgba(229, 72, 77, 0.3); text-decoration: underline wavy var(--lh-red); text-underline-offset: 3px; }
