@@ -1,0 +1,112 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> › Routing</div>{% endblock %}
+{% block content %}
+<div id="content-main" class="lh-narrow">
+
+  <section class="lh-card" id="new-connection">
+    <h2 class="lh-card-title">New connection</h2>
+    <p class="lh-card-subtitle">Choose where leads come from and which webhook receives them.</p>
+    {% if not pages %}
+      <p class="lh-muted">No pages yet. <a href="{% url 'setup' %}">Connect your Facebook pages in the setup</a> first.</p>
+    {% elif not destinations %}
+      <p class="lh-muted">No destinations yet.</p>
+      <a class="lh-btn lh-btn-primary" href="{% url 'admin:destinations_destination_add' %}">Create your first destination</a>
+    {% elif can_change %}
+      <form method="post" class="lh-connect">
+        {% csrf_token %}
+        <label class="lh-field">
+          <span>Leads from</span>
+          <select name="source" required>
+            {% for page in pages %}
+              <optgroup label="{{ page }}">
+                <option value="page:{{ page.pk }}">All forms of {{ page.name|default:page.page_id }} (page default)</option>
+                {% for form in page.forms.all %}
+                  <option value="form:{{ form.pk }}">{{ form.name|default:form.form_id }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+        </label>
+        <span class="lh-connect-arrow" aria-hidden="true">→</span>
+        <label class="lh-field">
+          <span>Send to</span>
+          <select name="destination" required>
+            {% for destination in destinations %}
+              <option value="{{ destination.pk }}">{{ destination.name }}{% if not destination.active %} (paused){% endif %}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="lh-btn lh-btn-primary" type="submit" name="action" value="connect">Connect</button>
+      </form>
+      <p class="lh-muted lh-hint">Need another webhook? <a href="{% url 'admin:destinations_destination_add' %}">Create a destination</a>, then come back here.</p>
+    {% endif %}
+  </section>
+
+  <div class="lh-callout lh-callout-quiet">
+    <span class="lh-icon-chip"><svg aria-hidden="true"><use href="#lh-shuffle"></use></svg></span>
+    <div><strong>How routing works.</strong> A form with its own destinations sends only to those.
+      Every other form of the page uses the <em>page default</em>. A lead with nowhere to go waits as
+      <em>unrouted</em> until you connect it.</div>
+  </div>
+
+  <section class="lh-card lh-card-flush">
+    <div class="lh-card-head">
+      <h2 class="lh-card-title">Connections</h2>
+      <p class="lh-card-subtitle">Remove a connection with ×. Paused destinations are kept but receive nothing.</p>
+    </div>
+    <table class="lh-table lh-routing">
+      <thead><tr><th scope="col">Leads from</th><th scope="col">Sent to</th><th scope="col" class="lh-num">Waiting</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr class="lh-routing-{{ row.kind }}">
+          <td>
+            {% if row.kind == "page" %}
+              <span class="lh-row-title">
+                <span class="lh-avatar">{{ row.source.name|default:row.source.page_id|first|upper }}</span>
+                <span>{{ row.source.name|default:"Page" }}<small>Page default · {{ row.source.page_id }}</small></span>
+              </span>
+            {% else %}
+              <span class="lh-form-name">{{ row.source.name|default:row.source.form_id }}<small>{{ row.source.form_id }}{% if row.source.status and row.source.status != "ACTIVE" %} · {{ row.source.status|lower }}{% endif %}</small></span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="lh-pills">
+              {% for destination in row.destinations %}
+                <form method="post" class="lh-pill{% if not destination.active %} is-paused{% endif %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="source" value="{{ row.key }}">
+                  <input type="hidden" name="destination" value="{{ destination.pk }}">
+                  <a href="{% url 'admin:destinations_destination_change' destination.pk %}">{{ destination.name }}</a>{% if not destination.active %} <small>paused</small>{% endif %}
+                  {% if can_change %}<button type="submit" name="action" value="disconnect" aria-label="Disconnect {{ destination.name }}" title="Disconnect">×</button>{% endif %}
+                </form>
+              {% empty %}
+                {% if row.inherited %}
+                  <span class="lh-muted">Page default:</span>
+                  {% for destination in row.inherited %}<span class="lh-pill is-inherited">{{ destination.name }}</span>{% endfor %}
+                {% elif row.kind == "page" %}
+                  <span class="lh-badge lh-badge-warning">No default</span>
+                {% else %}
+                  <span class="lh-badge lh-badge-danger">Nowhere — leads wait as unrouted</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </td>
+          <td class="lh-num">
+            {% if row.kind == "page" and row.waiting %}
+              <form method="post" class="lh-waiting">
+                {% csrf_token %}
+                <input type="hidden" name="source" value="{{ row.key }}">
+                <span class="lh-badge lh-badge-warning">{{ row.waiting }}</span>
+                {% if can_change %}<button class="lh-btn lh-btn-dark lh-btn-sm" type="submit" name="action" value="deliver_waiting">Deliver now</button>{% endif %}
+              </form>
+            {% elif row.kind == "page" %}<span class="lh-muted">—</span>{% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3" class="lh-empty">No pages connected yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}
