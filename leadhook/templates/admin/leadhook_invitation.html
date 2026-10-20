@@ -1,0 +1,28 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/login.css" %}">{% endblock %}
+{% block bodyclass %}{{ block.super }} login{% endblock %}
+{% block usertools %}{% endblock %}
+{% block nav-global %}{% endblock %}
+{% block content_title %}{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block content %}
+<div id="content-main">
+{% if form %}
+  <p>You were invited as <strong>{{ invitation.email }}</strong>. Choose a username and a password.</p>
+  {% if form.non_field_errors %}{% for error in form.non_field_errors %}<p class="errornote">{{ error }}</p>{% endfor %}{% endif %}
+  <form method="post">{% csrf_token %}
+    {% for field in form %}
+      <div class="form-row">
+        {{ field.errors }}
+        {{ field.label_tag }} {{ field }}
+      </div>
+    {% endfor %}
+    <div class="submit-row"><input type="submit" value="Create account"></div>
+  </form>
+{% else %}
+  <p class="errornote">This invitation link is no longer valid: it was already used, revoked or it expired.</p>
+  <p>Ask whoever invited you for a new one.</p>
+{% endif %}
+</div>
+{% endblock %}
