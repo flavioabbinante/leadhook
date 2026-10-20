@@ -1,12 +1,12 @@
 <div class="lh-insert">
   <div class="lh-insert-row">
-    <span class="lh-insert-label">Form</span>
+    <span class="lh-insert-label">Modulo</span>
     {% if forms %}
-      <select class="lh-insert-form" aria-label="Form whose questions to insert">
+      <select class="lh-insert-form" aria-label="Modulo di cui inserire le domande">
         {% for form in forms %}<option value="{{ form.pk }}">{{ form.name|default:form.form_id }}</option>{% endfor %}
       </select>
     {% else %}
-      <span class="lh-flow-detail">No form questions yet: connect a page in the setup.</span>
+      <span class="lh-flow-detail">Nessuna domanda di un modulo per ora: collega una pagina nella configurazione.</span>
     {% endif %}
   </div>
   {% for form in forms %}

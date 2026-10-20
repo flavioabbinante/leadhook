@@ -90,11 +90,11 @@ def render_payload(template: str, context: dict) -> str:
     try:
         rendered = _env.from_string(template).render(**context)
     except Exception as exc:
-        raise TemplateError(f"Template error: {exc}") from exc
+        raise TemplateError(f"Errore nel template: {exc}") from exc
     try:
         json.loads(rendered)
     except ValueError as exc:
-        raise TemplateError(f"Rendered payload is not valid JSON: {exc}") from exc
+        raise TemplateError(f"Il payload generato non è un JSON valido: {exc}") from exc
     return rendered
 
 
@@ -103,4 +103,4 @@ def evaluate_condition(expression: str, *, response, status_code: int) -> bool:
         compiled = _env.compile_expression(expression, undefined_to_none=True)
         return bool(compiled(response=response, status_code=status_code))
     except Exception as exc:
-        raise TemplateError(f"Success condition error: {exc}") from exc
+        raise TemplateError(f"Errore nella condizione di successo: {exc}") from exc

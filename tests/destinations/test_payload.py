@@ -111,5 +111,5 @@ def test_telegram_body_lists_answers_under_question_labels():
     destination.kind, destination.telegram_chat_id = "telegram", "-100"
     assert json.loads(render_body(destination, context)) == {
         "chat_id": "-100",
-        "text": "New lead · Test form\n\nNome e cognome: Jane Doe\n\nCampaign: Campaign 1",
+        "text": "Nuovo lead · Test form\n\nNome e cognome: Jane Doe\n\nCampagna: Campaign 1",
     }

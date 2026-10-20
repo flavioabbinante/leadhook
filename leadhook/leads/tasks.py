@@ -58,9 +58,10 @@ def fetch_lead(self, lead_id: int, attempt: int = 0) -> None:
             # Stays "received" with its error; the hourly sweep (and reconciliation) retry it.
             send_alert(
                 AlertKind.FETCH_FAILED,
-                "Lead could not be fetched",
-                f"Lead {lead.leadgen_id} could not be read from Meta after {attempt + 1} "
-                f"attempts: {lead.error}\nLeadHook keeps retrying it every hour for 7 days.",
+                "Impossibile leggere il lead da Meta",
+                f"Non è stato possibile leggere il lead {lead.leadgen_id} da Meta dopo "
+                f"{attempt + 1} tentativi: {lead.error}\n"
+                "LeadHook continua a riprovare ogni ora per 7 giorni.",
             )
             return
         raise self.retry(
@@ -84,7 +85,7 @@ def reconcile_leads() -> None:
             leads = reconcile_form(form, client_for_page(form.page), now=now)
         except GraphError as exc:
             if exc.is_token_error:
-                record_page_error(form.page, f"Meta rejected the page token: {exc}")
+                record_page_error(form.page, f"Meta ha rifiutato il token della pagina: {exc}")
             else:
                 logger.warning("Reconciliation of form %s failed: %s", form.form_id, exc)
             continue

@@ -9,7 +9,7 @@
 {% block content %}
 <div id="content-main">
 {% if form %}
-  <p>You were invited as <strong>{{ invitation.email }}</strong>. Choose a username and a password.</p>
+  <p>Sei stato invitato come <strong>{{ invitation.email }}</strong>. Scegli un nome utente e una password.</p>
   {% if form.non_field_errors %}{% for error in form.non_field_errors %}<p class="errornote">{{ error }}</p>{% endfor %}{% endif %}
   <form method="post">{% csrf_token %}
     {% for field in form %}
@@ -18,11 +18,11 @@
         {{ field.label_tag }} {{ field }}
       </div>
     {% endfor %}
-    <div class="submit-row"><input type="submit" value="Create account"></div>
+    <div class="submit-row"><input type="submit" value="Crea account"></div>
   </form>
 {% else %}
-  <p class="errornote">This invitation link is no longer valid: it was already used, revoked or it expired.</p>
-  <p>Ask whoever invited you for a new one.</p>
+  <p class="errornote">Questo link di invito non è più valido: è già stato usato, revocato oppure è scaduto.</p>
+  <p>Chiedine uno nuovo a chi ti ha invitato.</p>
 {% endif %}
 </div>
 {% endblock %}

@@ -77,7 +77,7 @@ def test_tojson_keeps_unicode_and_escapes_quotes():
 
 
 def test_invalid_json_output_is_rejected():
-    with pytest.raises(TemplateError, match="not valid JSON"):
+    with pytest.raises(TemplateError, match="non è un JSON valido"):
         render_payload('{"a": {{ id }}', CONTEXT)
 
 

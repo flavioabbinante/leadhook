@@ -81,5 +81,5 @@ def test_deliver_fails_pending_delivery_of_purged_lead():
     deliver(delivery.pk)
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.FAILED
-    assert "purged" in delivery.last_error
+    assert "eliminati" in delivery.last_error
     assert len(responses.calls) == 0

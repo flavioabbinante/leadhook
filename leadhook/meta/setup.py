@@ -54,7 +54,7 @@ def setup_view(request):
     context = {
         **site.each_context(request),
         **status,
-        "title": "Set up LeadHook",
+        "title": "Configurazione guidata",
         "login_redirect_url": MetaApp.login_redirect_url(),
         "available_pages": None,
         "forms": Form.objects.filter(page__subscribed=True)
@@ -67,7 +67,7 @@ def setup_view(request):
             "meta.add_metaapp" if meta_app is None else "meta.change_metaapp"
         ):
             raise PermissionDenied
-        instance = meta_app or MetaApp(workspace=get_default_workspace(), name="Meta app")
+        instance = meta_app or MetaApp(workspace=get_default_workspace(), name="App Meta")
         app_form = AppCredentialsForm(request.POST, instance=instance)
         if app_form.is_valid():
             app_form.save()
@@ -96,7 +96,7 @@ def _verify_webhook(request, meta_app: MetaApp) -> None:
     try:
         subscriptions = app_subscriptions(meta_app)
     except GraphError as exc:
-        messages.error(request, f"Could not read the app's webhook subscriptions: {exc}")
+        messages.error(request, f"Impossibile leggere le iscrizioni webhook dell'app: {exc}")
         return
     for subscription in subscriptions:
         fields = {f.get("name") for f in subscription.get("fields") or [] if isinstance(f, dict)}
@@ -105,12 +105,14 @@ def _verify_webhook(request, meta_app: MetaApp) -> None:
             and subscription.get("callback_url") == meta_app.webhook_url()
             and "leadgen" in fields
         ):
-            messages.success(request, "Webhook verified: Meta sends page leadgen events here.")
+            messages.success(
+                request, "Webhook verificato: Meta invia qui gli eventi leadgen della pagina."
+            )
             return
     messages.error(
         request,
-        "Meta has no Page subscription with the leadgen field for this callback URL yet. "
-        "Complete the webhook step, then verify again.",
+        "Meta non ha ancora un'iscrizione Page con il campo leadgen per questo URL di callback. "
+        "Completa il passaggio del webhook, poi verifica di nuovo.",
     )
 
 
@@ -122,7 +124,7 @@ def _load_pages(request, meta_app: MetaApp) -> list[dict] | None:
     try:
         pages = _user_pages(meta_app)
     except GraphError as exc:
-        messages.error(request, f"Could not list pages: {exc}")
+        messages.error(request, f"Impossibile elencare le pagine: {exc}")
         return None
     connected = set(Page.objects.values_list("page_id", flat=True))
     # Only id and name: page tokens stay server side and are fetched again on connect.
@@ -135,45 +137,47 @@ def _load_pages(request, meta_app: MetaApp) -> list[dict] | None:
 
 def _connect_pages(request, meta_app: MetaApp, page_ids: list[str]) -> None:
     if not page_ids:
-        messages.warning(request, "Select at least one page.")
+        messages.warning(request, "Seleziona almeno una pagina.")
         return
     try:
         available = {str(p.get("id")): p for p in _user_pages(meta_app)}
     except GraphError as exc:
-        messages.error(request, f"Could not list pages: {exc}")
+        messages.error(request, f"Impossibile elencare le pagine: {exc}")
         return
     for page_id in page_ids:
         raw = available.get(page_id)
         if raw is None:
-            messages.error(request, f"Page {page_id} is not reachable with the app's token.")
+            messages.error(
+                request, f"La pagina {page_id} non è raggiungibile con il token dell'app."
+            )
             continue
         try:
             page, form_count = connect_page(meta_app, raw)
         except GraphError as exc:
-            messages.error(request, f"Page {raw.get('name') or page_id}: {exc}")
+            messages.error(request, f"Pagina {raw.get('name') or page_id}: {exc}")
             continue
-        messages.success(request, f"Connected {page} with {form_count} form(s).")
+        messages.success(request, f"Pagina {page} collegata, moduli trovati: {form_count}.")
 
 
 def _send_test_lead(request, form_id: str) -> None:
     form = Form.objects.select_related("page__meta_app").filter(form_id=form_id).first()
     if form is None:
-        messages.error(request, "Choose a form.")
+        messages.error(request, "Scegli un modulo.")
         return
     try:
         client_for_page(form.page).create_test_lead(form.form_id)
     except GraphError as exc:
         messages.error(
             request,
-            f"Meta refused the test lead: {exc}. Meta keeps one test lead per form: delete "
-            "the previous one in the Lead Ads Testing Tool and try again.",
+            f"Meta ha rifiutato il lead di prova: {exc}. Meta tiene un solo lead di prova "
+            "per modulo: elimina quello precedente nel Lead Ads Testing Tool e riprova.",
         )
         return
     messages.success(
         request,
         format_html(
-            'Test lead requested. It appears in <a href="{}">Leads</a> as soon as Meta sends '
-            "the webhook, usually within a minute.",
+            'Lead di prova richiesto. Compare in <a href="{}">Lead</a> appena Meta invia il '
+            "webhook, di solito entro un minuto.",
             reverse("admin:leads_lead_changelist"),
         ),
     )

@@ -106,5 +106,5 @@ def test_reconcile_token_error_flags_page(mailoutbox):
     responses.get(LEADS_URL, status=400, json={"error": {"message": "bad token", "code": 190}})
     reconcile_leads()
     form.page.refresh_from_db()
-    assert form.page.error.startswith("Meta rejected the page token")
+    assert form.page.error.startswith("Meta ha rifiutato il token della pagina")
     assert len(mailoutbox) == 1

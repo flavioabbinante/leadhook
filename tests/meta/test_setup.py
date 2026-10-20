@@ -19,7 +19,7 @@ def test_setup_requires_staff(client):
 def test_setup_asks_for_app_credentials_first(admin_client):
     html = admin_client.get(SETUP).content.decode()
     assert 'name="app_id"' in html
-    assert "Save and connect with Facebook" in html
+    assert "Salva e collega con Facebook" in html
 
 
 def test_saving_app_credentials_starts_facebook_login(admin_client):
@@ -64,7 +64,7 @@ def test_verify_webhook_ok(admin_client):
         },
     )
     response = admin_client.post(SETUP, {"action": "verify"}, follow=True)
-    assert "Webhook verified" in response.content.decode()
+    assert "Webhook verificato" in response.content.decode()
 
 
 @responses.activate
@@ -72,7 +72,7 @@ def test_verify_webhook_missing_subscription(admin_client):
     make_meta_app()
     responses.get(f"{BASE}/1000/subscriptions", json={"data": []})
     response = admin_client.post(SETUP, {"action": "verify"}, follow=True)
-    assert "no Page subscription" in response.content.decode()
+    assert "iscrizione Page con il campo leadgen" in response.content.decode()
 
 
 @responses.activate
@@ -102,7 +102,7 @@ def test_send_test_lead(admin_client):
     make_form()
     responses.post(f"{BASE}/222/test_leads", json={"id": "999"})
     response = admin_client.post(SETUP, {"action": "test_lead", "form_id": "222"}, follow=True)
-    assert "Test lead requested" in response.content.decode()
+    assert "Lead di prova richiesto" in response.content.decode()
 
 
 @responses.activate
@@ -119,7 +119,7 @@ def test_send_test_lead_error_explains_one_per_form(admin_client):
 
 def test_dashboard_links_setup_until_complete(admin_client):
     index = reverse("admin:index")
-    assert "Continue the guided setup" in admin_client.get(index).content.decode()
+    assert "Continua la configurazione guidata" in admin_client.get(index).content.decode()
     page = make_page()
     page.default_destinations.add(make_destination())
-    assert "Continue the guided setup" not in admin_client.get(index).content.decode()
+    assert "Continua la configurazione guidata" not in admin_client.get(index).content.decode()
