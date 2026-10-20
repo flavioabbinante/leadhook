@@ -341,3 +341,17 @@ def test_saving_form_with_destinations_offers_unrouted_leads(admin_client):
     text = " ".join(str(m) for m in get_messages(response.wsgi_request))
     assert "1 unrouted lead(s)" in text
     assert f"form__id__exact={form.pk}" in text
+
+
+def test_telegram_message_fields_are_grouped_by_form(admin_client):
+    make_lead()
+    Form.objects.update(questions=[{"key": "e-mail", "label": "Email"}])
+    destination = make_destination(kind="telegram", url="", telegram_chat_id="-100")
+    content = admin_client.get(
+        reverse("admin:destinations_destination_change", args=[destination.pk])
+    ).content.decode()
+    form = Form.objects.get()
+    assert f'<option value="{form.pk}">Test form</option>' in content
+    assert f'data-form="{form.pk}"' in content
+    assert 'data-insert="{e-mail}"' in content
+    assert 'data-insert="{campaign}"' in content

@@ -100,3 +100,16 @@ def test_clashing_field_mappings_raise():
     _map(delivery.destination, "fields.email", "answer:email")
     with pytest.raises(TemplateError):
         render_body(delivery.destination, context)
+
+
+def test_telegram_body_lists_answers_under_question_labels():
+    lead = make_lead()
+    lead.form.questions = [{"key": "full_name", "label": "Nome e cognome"}]
+    lead.form.save()
+    context, delivery = _context(lead)
+    destination = delivery.destination
+    destination.kind, destination.telegram_chat_id = "telegram", "-100"
+    assert json.loads(render_body(destination, context)) == {
+        "chat_id": "-100",
+        "text": "New lead · Test form\n\nNome e cognome: Jane Doe\n\nCampaign: Campaign 1",
+    }

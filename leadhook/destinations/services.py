@@ -63,7 +63,7 @@ def describe_unexpected_error(exc: Exception, destination) -> str:
     message = f"{type(exc).__name__}: {exc}"
     if destination.secret:
         message = message.replace(destination.secret, "***")
-    return redact_url(message, destination.url)
+    return redact_url(message, destination.endpoint_url())
 
 
 def _save_if_leased(delivery: Delivery, lease: datetime, fields: list[str]) -> bool:

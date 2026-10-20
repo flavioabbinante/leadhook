@@ -1,0 +1,23 @@
+<div class="lh-flow">
+  {% for step in steps %}
+    <div class="lh-flow-node lh-flow-{{ step.state }}">
+      <span class="lh-flow-icon"><svg aria-hidden="true"><use href="#lh-{{ step.icon }}"></use></svg></span>
+      <strong>{{ step.title }}</strong>
+      {% if step.detail %}<span class="lh-flow-detail">{{ step.detail }}</span>{% endif %}
+      {% if step.time %}<span class="lh-flow-time">{{ step.time }}</span>{% endif %}
+    </div>
+    <span class="lh-flow-edge" aria-hidden="true"></span>
+  {% endfor %}
+  <div class="lh-flow-branches">
+    {% for step in branches %}
+      <a class="lh-flow-node lh-flow-{{ step.state }}" href="{{ step.url }}">
+        <span class="lh-flow-icon"><svg aria-hidden="true"><use href="#lh-{{ step.icon }}"></use></svg></span>
+        <strong>{{ step.title }}</strong>
+        <span class="lh-flow-detail">{{ step.detail }}</span>
+        {% if step.time %}<span class="lh-flow-time">{{ step.time }}</span>{% endif %}
+      </a>
+    {% empty %}
+      <div class="lh-flow-node lh-flow-pending"><strong>No deliveries yet</strong></div>
+    {% endfor %}
+  </div>
+</div>

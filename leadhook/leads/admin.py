@@ -1,9 +1,11 @@
 from django.contrib import admin
+from django.template.loader import render_to_string
 
 from leadhook.destinations.admin import DeliveryInline
 from leadhook.destinations.tasks import route_lead
 
 from .models import Lead, WebhookEvent
+from .pipeline import lead_pipeline
 from .tasks import fetch_lead, process_event
 
 
@@ -14,10 +16,17 @@ class LeadAdmin(admin.ModelAdmin):
     search_fields = ("leadgen_id",)
     inlines = [DeliveryInline]
     actions = ["reprocess"]
-    readonly_fields = [f.name for f in Lead._meta.fields]
+    readonly_fields = ["pipeline", *(f.name for f in Lead._meta.fields)]
 
     def has_add_permission(self, request):
         return False
+
+    @admin.display(description="Pipeline")
+    def pipeline(self, lead: Lead):
+        steps, branches = lead_pipeline(lead)
+        return render_to_string(
+            "admin/leadhook_pipeline.html", {"steps": steps, "branches": branches}
+        )
 
     @admin.action(description="Reprocess selected leads")
     def reprocess(self, request, queryset):
