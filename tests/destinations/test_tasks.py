@@ -58,7 +58,7 @@ def test_deliver_gives_up_after_last_retry():
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.FAILED
     assert delivery.attempts == len(DELIVERY_BACKOFF) + 1
-    assert "Gave up after 7 attempts" in delivery.last_error
+    assert "Rinuncia dopo 7 tentativi" in delivery.last_error
     assert delivery.lead.status == Lead.Status.FAILED
 
 
@@ -262,4 +262,4 @@ def test_failing_template_filter_fails_delivery_without_retry():
     deliver(delivery.pk)
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.FAILED
-    assert delivery.last_error.startswith("Template error")
+    assert delivery.last_error.startswith("Errore nel template")

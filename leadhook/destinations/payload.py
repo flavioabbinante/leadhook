@@ -68,12 +68,12 @@ def telegram_text(context: dict) -> str:
     """Plain-text message: the form, each answer under its question label, the campaign."""
     form = Form.objects.filter(form_id=context["form"]["id"]).only("questions").first()
     labels = {q["key"]: q["label"] for q in form.questions} if form else {}
-    lines = [f"New lead · {context['form']['name'] or 'Meta form'}", ""]
+    lines = [f"Nuovo lead · {context['form']['name'] or 'Modulo Meta'}", ""]
     for key, value in context["data"].items():
         shown = ", ".join(map(str, value)) if isinstance(value, list) else value
         lines.append(f"{labels.get(key, key)}: {shown}")
     if context["campaign"]["name"]:
-        lines += ["", f"Campaign: {context['campaign']['name']}"]
+        lines += ["", f"Campagna: {context['campaign']['name']}"]
     return "\n".join(lines)[:TEXT_LIMIT]
 
 
@@ -93,9 +93,11 @@ def build_mapped_body(mappings: list[FieldMapping], context: dict) -> dict:
         for part in parents:
             node = node.setdefault(part, {})
             if not isinstance(node, dict):
-                raise TemplateError(f"Field {mapping.target} clashes with field {part}.")
+                raise TemplateError(
+                    f"Il campo {mapping.target} è in conflitto con il campo {part}."
+                )
         if leaf in node:
-            raise TemplateError(f"Field {mapping.target} is set twice.")
+            raise TemplateError(f"Il campo {mapping.target} è impostato due volte.")
         node[leaf] = _mapped_value(mapping, context)
     return body
 

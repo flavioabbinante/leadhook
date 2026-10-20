@@ -29,7 +29,7 @@ def _relation(source: Page | Form):
 
 
 def _describe(source: Page | Form) -> str:
-    return f"all forms of {source}" if isinstance(source, Page) else f"form {source}"
+    return f"di tutti i moduli di {source}" if isinstance(source, Page) else f"del modulo {source}"
 
 
 def _unrouted(source: Page | Form):
@@ -85,7 +85,7 @@ def routing_view(request):
             )
     context = {
         **site.each_context(request),
-        "title": "Routing",
+        "title": "Instradamento",
         "rows": rows,
         "pages": pages,
         "destinations": destinations,
@@ -100,33 +100,33 @@ def _handle(request) -> None:
     action = request.POST.get("action")
     source = _source(request.POST.get("source", ""))
     if source is None:
-        messages.error(request, "Choose where the leads come from.")
+        messages.error(request, "Scegli da dove arrivano i lead.")
         return
     if action == "deliver_waiting":
         leads = list(_unrouted(source).values_list("pk", flat=True))
         for pk in leads:
             route_lead.delay(pk)
         page = source.page if isinstance(source, Form) else source
-        messages.success(request, f"{len(leads)} waiting lead(s) of {page} sent to routing.")
+        messages.success(
+            request, f"{len(leads)} lead in attesa di {page} inviati all'instradamento."
+        )
         return
     destination = Destination.objects.filter(pk=request.POST.get("destination") or 0).first()
     if destination is None:
-        messages.error(request, "Choose a destination.")
+        messages.error(request, "Scegli una destinazione.")
         return
     if action == "connect":
         _relation(source).add(destination)
-        messages.success(request, f"Leads from {_describe(source)} now go to {destination}.")
+        messages.success(request, f"I lead {_describe(source)} ora vanno a {destination}.")
         waiting = _unrouted(source).count()
         if waiting:
             messages.warning(
                 request,
-                f"{waiting} lead(s) of this page were waiting for a destination: "
-                "press “Deliver now” on the page row to send them.",
+                f"{waiting} lead di questa pagina erano in attesa di una destinazione: "
+                "premi “Consegna ora” sulla riga della pagina per inviarli.",
             )
     elif action == "disconnect":
         _relation(source).remove(destination)
-        messages.success(
-            request, f"{destination} no longer receives leads from {_describe(source)}."
-        )
+        messages.success(request, f"{destination} non riceve più i lead {_describe(source)}.")
     else:
-        messages.error(request, "Unknown action.")
+        messages.error(request, "Azione sconosciuta.")

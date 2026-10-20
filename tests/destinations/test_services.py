@@ -85,7 +85,7 @@ def test_template_error_fails_without_sending():
     delivery.refresh_from_db()
     assert result.outcome == "fail"
     assert delivery.status == Delivery.Status.FAILED
-    assert "Template error" in delivery.last_error
+    assert "Errore nel template" in delivery.last_error
 
 
 def test_next_retry_delay():

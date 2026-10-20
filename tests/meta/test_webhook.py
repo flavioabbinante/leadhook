@@ -80,7 +80,7 @@ def test_bad_signature_is_stored_but_not_processed(client, django_capture_on_com
     assert response.status_code == 200
     event = WebhookEvent.objects.get()
     assert not event.signature_ok
-    assert event.error == "Invalid signature"
+    assert event.error == "Firma non valida"
     delay.assert_not_called()
 
 

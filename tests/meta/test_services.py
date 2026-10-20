@@ -60,7 +60,7 @@ def test_check_page_subscription_failure_is_recorded_and_alerted(mailoutbox):
     )
     check_page(page, now=NOW)
     page.refresh_from_db()
-    assert page.error.startswith("Could not subscribe the page to lead events")
+    assert page.error.startswith("Impossibile iscrivere la pagina agli eventi dei lead")
     assert len(mailoutbox) == 1
 
 
@@ -79,7 +79,7 @@ def test_check_meta_app_alerts_on_invalid_token(mailoutbox):
     app = make_meta_app()
     responses.get(f"{BASE}/debug_token", json={"data": {"is_valid": False}})
     check_meta_app(app, now=NOW)
-    assert "no longer valid" in mailoutbox[0].body
+    assert "non è più valido" in mailoutbox[0].body
 
 
 @responses.activate
@@ -92,7 +92,7 @@ def test_check_meta_app_stores_expiry_and_warns(mailoutbox):
     )
     check_meta_app(app, now=NOW)
     assert MetaApp.objects.get(pk=app.pk).token_expires_at == expires
-    assert "expires on 2026-10-22" in mailoutbox[0].body
+    assert "scade il 22/10/2026" in mailoutbox[0].body
 
 
 @responses.activate

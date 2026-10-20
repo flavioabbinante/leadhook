@@ -56,7 +56,7 @@ def meta_webhook(request: HttpRequest, webhook_uuid) -> HttpResponse:
             token.encode(), meta_app.verify_token.encode()
         ):
             return HttpResponse(request.GET.get("hub.challenge", ""), content_type="text/plain")
-        return HttpResponseForbidden("Invalid verify token")
+        return HttpResponseForbidden("Token di verifica non valido")
 
     raw_body = request.body
     signature_ok = verify_signature(
@@ -79,7 +79,7 @@ def meta_webhook(request: HttpRequest, webhook_uuid) -> HttpResponse:
         meta_app=meta_app,
         payload=payload,
         signature_ok=signature_ok,
-        error="" if signature_ok else "Invalid signature",
+        error="" if signature_ok else "Firma non valida",
     )
     if signature_ok:
         transaction.on_commit(lambda: _enqueue(event.pk))

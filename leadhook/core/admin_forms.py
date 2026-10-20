@@ -18,7 +18,7 @@ class SecretAwareModelForm(forms.ModelForm):
             stored = getattr(self.instance, name, "") if self.instance.pk else ""
             if stored:
                 field.required = False
-                field.help_text = f"Stored: {mask_secret(stored)}. Leave blank to keep it."
+                field.help_text = f"Salvato: {mask_secret(stored)}. Lascia vuoto per mantenerlo."
 
     def clean(self):
         cleaned = super().clean()

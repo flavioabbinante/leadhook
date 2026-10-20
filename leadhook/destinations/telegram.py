@@ -6,13 +6,13 @@ import re
 TEXT_LIMIT = 4096
 # Placeholder name -> (path in the standard payload, label); any other name is an answer key.
 LEAD_PLACEHOLDERS = {
-    "form": ("form.name", "Form name"),
-    "page": ("page.name", "Page"),
-    "campaign": ("campaign.name", "Campaign"),
-    "adset": ("adset.name", "Ad set"),
-    "ad": ("ad.name", "Ad"),
-    "lead_id": ("id", "Lead ID"),
-    "created_time": ("created_time", "Created time"),
+    "form": ("form.name", "Nome del modulo"),
+    "page": ("page.name", "Pagina"),
+    "campaign": ("campaign.name", "Campagna"),
+    "adset": ("adset.name", "Gruppo di inserzioni"),
+    "ad": ("ad.name", "Inserzione"),
+    "lead_id": ("id", "ID del lead"),
+    "created_time": ("created_time", "Data di creazione"),
 }
 PLACEHOLDER = re.compile(r"\{\{?\s*([^{}\n]+?)\s*\}?\}")
 TOKEN = re.compile(r"\x00(\d+)\x00")

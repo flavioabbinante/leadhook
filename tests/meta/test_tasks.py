@@ -27,4 +27,4 @@ def test_sync_forms_token_error_flags_page(mailoutbox):
     )
     sync_forms()
     page.refresh_from_db()
-    assert page.error.startswith("Meta rejected the page token")
+    assert page.error.startswith("Meta ha rifiutato il token della pagina")

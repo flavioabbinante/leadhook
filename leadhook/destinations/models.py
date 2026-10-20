@@ -12,11 +12,11 @@ from leadhook.leads.models import Lead
 def _header_text_problem(value: str) -> str | None:
     """Why a header name or value cannot be sent over HTTP/1.1, or None if it can."""
     if "\r" in value or "\n" in value:
-        return "must not contain line breaks"
+        return "non può contenere a capo"
     try:
         value.encode("latin-1")
     except UnicodeEncodeError:
-        return "may only contain Latin-1 characters"
+        return "può contenere solo caratteri Latin-1"
     return None
 
 
@@ -28,71 +28,87 @@ TELEGRAM_CHAT_ID = re.compile(r"-?\d+|@[A-Za-z0-9_]{5,}")
 class Destination(models.Model):
     class Kind(models.TextChoices):
         WEBHOOK = "webhook", "Webhook"
-        TELEGRAM = "telegram", "Telegram message"
+        TELEGRAM = "telegram", "Messaggio Telegram"
 
     class Method(models.TextChoices):
         POST = "POST", "POST"
         PUT = "PUT", "PUT"
 
     class AuthType(models.TextChoices):
-        NONE = "none", "None"
-        HEADER = "header", "Custom header"
+        NONE = "none", "Nessuna"
+        HEADER = "header", "Header personalizzato"
         BEARER = "bearer", "Bearer token"
-        HMAC = "hmac", "HMAC signature"
+        HMAC = "hmac", "Firma HMAC"
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="destinations")
-    name = models.CharField(max_length=200)
-    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.WEBHOOK)
+    name = models.CharField("nome", max_length=200)
+    kind = models.CharField("tipo", max_length=20, choices=Kind.choices, default=Kind.WEBHOOK)
     url = models.URLField("URL", max_length=2000, blank=True)
-    method = models.CharField(max_length=8, choices=Method.choices, default=Method.POST)
-    auth_type = models.CharField(max_length=16, choices=AuthType.choices, default=AuthType.NONE)
+    method = models.CharField("metodo", max_length=8, choices=Method.choices, default=Method.POST)
+    auth_type = models.CharField(
+        "tipo di autenticazione", max_length=16, choices=AuthType.choices, default=AuthType.NONE
+    )
     auth_header_name = models.CharField(
-        max_length=100, blank=True, help_text="Header name for 'Custom header' authentication."
+        "nome dell'header",
+        max_length=100,
+        blank=True,
+        help_text="Nome dell'header per l'autenticazione «Header personalizzato».",
     )
     secret = EncryptedTextField(
+        "chiave segreta",
         blank=True,
         help_text=(
-            "Header value, bearer token or HMAC key, depending on authentication. "
-            "For Telegram: the bot token from @BotFather."
+            "Valore dell'header, bearer token o chiave HMAC, secondo l'autenticazione. "
+            "Per Telegram: il token del bot ricevuto da @BotFather."
         ),
     )
     message_template = models.TextField(
-        "Message",
+        "messaggio",
         blank=True,
         help_text=(
-            "Markdown: **bold**, _italic_, `code`, [link](https://…), # title, - list. "
-            "Click a field below to insert it. Empty sends every answer."
+            "Markdown: **grassetto**, _corsivo_, `codice`, [link](https://…), # titolo, "
+            "- elenco. Clicca un campo qui sotto per inserirlo. Se vuoto invia tutte le risposte."
         ),
     )
     telegram_chat_id = models.CharField(
-        "Telegram chat ID",
+        "ID della chat Telegram",
         max_length=64,
         blank=True,
-        help_text="The chat, group or channel that receives the message, e.g. -1001234567890.",
+        help_text="La chat, il gruppo o il canale che riceve il messaggio, es. -1001234567890.",
     )
     extra_headers = models.JSONField(
+        "header aggiuntivi",
         default=dict,
         blank=True,
-        help_text='Additional headers as a JSON object, e.g. {"X-Source": "leadhook"}.',
+        help_text='Header aggiuntivi come oggetto JSON, es. {"X-Source": "leadhook"}.',
     )
     payload_template = models.TextField(
+        "template del payload",
         blank=True,
         help_text=(
-            "For experts: a Jinja2 template producing JSON. When filled, it replaces the "
-            "fields to send. Leave both empty for the standard payload."
+            "Per esperti: un template Jinja2 che produce JSON. Se compilato, sostituisce i "
+            "campi da inviare. Lasciali vuoti entrambi per il payload standard."
         ),
     )
     success_condition = models.TextField(
+        "condizione di successo",
         blank=True,
-        help_text="Optional Jinja2 expression, e.g. response.success == true. Empty means any 2xx.",
+        help_text=(
+            "Espressione Jinja2 facoltativa, es. response.success == true. "
+            "Se vuota, va bene qualsiasi 2xx."
+        ),
     )
     timeout_s = models.PositiveIntegerField(
-        "Timeout (seconds)",
+        "timeout (secondi)",
         default=15,
         validators=[MinValueValidator(1), MaxValueValidator(120)],
     )
-    active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    active = models.BooleanField("attiva", default=True)
+    created_at = models.DateTimeField("creata il", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "destinazione"
+        verbose_name_plural = "destinazioni"
 
     def __str__(self) -> str:
         return self.name
@@ -111,45 +127,53 @@ class Destination(models.Model):
         if self.is_telegram:
             # The token goes in the URL path: only the BotFather format is accepted.
             if not TELEGRAM_TOKEN.fullmatch(self.secret or ""):
-                errors["secret"] = "Paste the bot token from @BotFather, e.g. 123456:ABC-def."
+                errors["secret"] = (
+                    "Incolla il token del bot ricevuto da @BotFather, es. 123456:ABC-def."
+                )
             if not TELEGRAM_CHAT_ID.fullmatch(self.telegram_chat_id):
-                errors["telegram_chat_id"] = "A number like 123456789 or -1001234567890, or @name."
+                errors["telegram_chat_id"] = (
+                    "Un numero come 123456789 o -1001234567890, oppure @nome."
+                )
             self.method = self.Method.POST
             self.auth_type = self.AuthType.NONE
             if errors:
                 raise ValidationError(errors)
             return
         if not self.url:
-            errors["url"] = "Required for a webhook."
+            errors["url"] = "Obbligatorio per un webhook."
         if self.auth_type == self.AuthType.HEADER and not self.auth_header_name:
-            errors["auth_header_name"] = "Required for custom header authentication."
+            errors["auth_header_name"] = (
+                "Obbligatorio per l'autenticazione con header personalizzato."
+            )
         if self.auth_type != self.AuthType.NONE and not self.secret:
-            errors["secret"] = "Required for the selected authentication."
+            errors["secret"] = "Obbligatorio per l'autenticazione scelta."
         if not isinstance(self.extra_headers, dict):
-            errors["extra_headers"] = "Must be a JSON object."
+            errors["extra_headers"] = "Deve essere un oggetto JSON."
         else:
             for name, value in self.extra_headers.items():
                 if not str(name).strip():
-                    errors["extra_headers"] = "Header names must not be empty."
+                    errors["extra_headers"] = "I nomi degli header non possono essere vuoti."
                     break
                 problem = _header_text_problem(str(name))
                 if problem:
-                    errors["extra_headers"] = f"Header name {name!r} {problem}."
+                    errors["extra_headers"] = f"Il nome dell'header {name!r} {problem}."
                     break
                 problem = _header_text_problem(str(value))
                 if problem:
-                    errors["extra_headers"] = f"Value of header {name!r} {problem}."
+                    errors["extra_headers"] = f"Il valore dell'header {name!r} {problem}."
                     break
         if self.auth_type == self.AuthType.HEADER and self.auth_header_name:
             problem = _header_text_problem(self.auth_header_name)
             if problem:
-                errors["auth_header_name"] = f"The header name {problem}."
+                errors["auth_header_name"] = f"Il nome dell'header {problem}."
         # Bearer tokens and custom header values are sent as header values; HMAC keys are not.
         if self.auth_type in (self.AuthType.BEARER, self.AuthType.HEADER) and self.secret:
             problem = _header_text_problem(self.secret)
             if problem:
                 # Never echo the secret itself.
-                errors["secret"] = f"The secret is sent as a header value and {problem}."
+                errors["secret"] = (
+                    f"La chiave segreta viene inviata come valore di un header e {problem}."
+                )
         if errors:
             raise ValidationError(errors)
 
@@ -160,34 +184,46 @@ class FieldMapping(models.Model):
     FIXED = "fixed"
     # source values: "fixed", "answer:<question key>" or "lead:<path in the standard payload>".
     LEAD_SOURCES = {
-        "id": "Meta lead ID",
-        "created_time": "Date the lead was created",
-        "form.name": "Form name",
-        "page.name": "Page name",
-        "campaign.name": "Campaign name",
-        "adset.name": "Ad set name",
-        "ad.name": "Ad name",
+        "id": "ID del lead Meta",
+        "created_time": "Data di creazione del lead",
+        "form.name": "Nome del modulo",
+        "page.name": "Nome della pagina",
+        "campaign.name": "Nome della campagna",
+        "adset.name": "Nome del gruppo di inserzioni",
+        "ad.name": "Nome dell'inserzione",
     }
 
     class Transform(models.TextChoices):
-        NONE = "", "As is"
-        FIRST_WORD = "first_word", "First word (first name)"
-        REST_WORDS = "rest_words", "Other words (last name)"
-        STRIP_PLUS39 = "strip_plus39", "Phone without +39"
+        NONE = "", "Così com'è"
+        FIRST_WORD = "first_word", "Prima parola (nome)"
+        REST_WORDS = "rest_words", "Altre parole (cognome)"
+        STRIP_PLUS39 = "strip_plus39", "Telefono senza +39"
 
     destination = models.ForeignKey(
-        Destination, on_delete=models.CASCADE, related_name="field_mappings"
+        Destination,
+        on_delete=models.CASCADE,
+        verbose_name="destinazione",
+        related_name="field_mappings",
     )
     target = models.CharField(
-        "Field name", max_length=200, help_text="As the CRM calls it. A dot nests: fields.email"
+        "nome del campo",
+        max_length=200,
+        help_text="Come lo chiama il CRM. Il punto annida: fields.email",
     )
-    source = models.CharField("Value", max_length=200)
+    source = models.CharField("valore", max_length=200)
     fixed_value = models.CharField(
-        max_length=500, blank=True, help_text="Only for “Fixed value”. Numbers stay numbers."
+        "valore fisso",
+        max_length=500,
+        blank=True,
+        help_text="Solo per «Valore fisso». I numeri restano numeri.",
     )
-    transform = models.CharField(max_length=20, choices=Transform.choices, blank=True)
+    transform = models.CharField(
+        "trasformazione", max_length=20, choices=Transform.choices, blank=True
+    )
 
     class Meta:
+        verbose_name = "campo"
+        verbose_name_plural = "campi"
         ordering = ("id",)
 
     def __str__(self) -> str:
@@ -195,38 +231,42 @@ class FieldMapping(models.Model):
 
     def clean(self) -> None:
         if any(not part.strip() for part in self.target.split(".")):
-            raise ValidationError({"target": "Write a name before and after each dot."})
+            raise ValidationError({"target": "Scrivi un nome prima e dopo ogni punto."})
 
 
 class Delivery(models.Model):
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        SUCCESS = "success", "Success"
-        FAILED = "failed", "Failed"
+        PENDING = "pending", "In attesa"
+        SUCCESS = "success", "Riuscita"
+        FAILED = "failed", "Fallita"
 
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="deliveries")
     destination = models.ForeignKey(
-        Destination, on_delete=models.CASCADE, related_name="deliveries"
+        Destination,
+        on_delete=models.CASCADE,
+        verbose_name="destinazione",
+        related_name="deliveries",
     )
     status = models.CharField(
-        max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
+        "stato", max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
     )
-    attempts = models.PositiveIntegerField(default=0)
+    attempts = models.PositiveIntegerField("tentativi", default=0)
     # Value of `attempts` when the current retry cycle started (bumped by a manual resend).
-    retry_base = models.PositiveIntegerField(default=0)
-    next_retry_at = models.DateTimeField(null=True, blank=True)
+    retry_base = models.PositiveIntegerField("base dei tentativi", default=0)
+    next_retry_at = models.DateTimeField("prossimo tentativo", null=True, blank=True)
     # Lease held by the worker currently sending; a crashed worker's lease simply expires.
-    locked_until = models.DateTimeField(null=True, blank=True)
-    last_status_code = models.PositiveIntegerField(null=True, blank=True)
-    last_error = models.TextField(blank=True)
-    request_body = models.TextField(blank=True)
-    response_body = models.TextField(blank=True)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    locked_until = models.DateTimeField("bloccata fino a", null=True, blank=True)
+    last_status_code = models.PositiveIntegerField("ultimo codice HTTP", null=True, blank=True)
+    last_error = models.TextField("ultimo errore", blank=True)
+    request_body = models.TextField("corpo della richiesta", blank=True)
+    response_body = models.TextField("corpo della risposta", blank=True)
+    delivered_at = models.DateTimeField("consegnata il", null=True, blank=True)
+    created_at = models.DateTimeField("creata il", auto_now_add=True)
+    updated_at = models.DateTimeField("aggiornata il", auto_now=True)
 
     class Meta:
-        verbose_name_plural = "deliveries"
+        verbose_name = "consegna"
+        verbose_name_plural = "consegne"
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(

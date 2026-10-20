@@ -37,7 +37,7 @@ def test_invitation_is_emailed_and_creates_a_staff_user(admin_client, client):
     assert user.email == "new@example.com"
     assert list(user.groups.all()) == [group]
     invitation.refresh_from_db()
-    assert invitation.user == user and invitation.status == "Accepted"
+    assert invitation.user == user and invitation.status == "Accettato"
     # Logged in straight away.
     assert client.get("/admin/").status_code == 200
 

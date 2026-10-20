@@ -48,7 +48,9 @@ def deliver(self, delivery_id: int) -> None:
         return
     if delivery.lead.purged_at is not None:
         mark_delivery_failed(
-            delivery, "Lead data was purged by the retention policy before delivery"
+            delivery,
+            "I dati del lead sono stati eliminati dalla politica di conservazione "
+            "prima della consegna",
         )
         refresh_lead_status(delivery.lead)
         return
@@ -61,7 +63,9 @@ def deliver(self, delivery_id: int) -> None:
         retry_index = delivery.attempts - delivery.retry_base - 1
         if retry_index >= len(DELIVERY_BACKOFF):
             mark_delivery_failed(
-                delivery, f"Gave up after {delivery.attempts} attempts: {result.error}", lease=lease
+                delivery,
+                f"Rinuncia dopo {delivery.attempts} tentativi: {result.error}",
+                lease=lease,
             )
         else:
             delay = next_retry_delay(retry_index, result.retry_after)

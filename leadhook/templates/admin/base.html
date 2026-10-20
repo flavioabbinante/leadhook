@@ -39,11 +39,11 @@ sidebar + top bar. Every block of the original is kept so stock admin pages rend
     <nav class="lh-sidebar-nav">{% leadhook_sidebar %}</nav>
     <div class="lh-help-card">
       <span class="lh-icon-chip"><svg aria-hidden="true"><use href="#lh-book"></use></svg></span>
-      <strong>Need help?</strong>
-      <span>Follow the guided setup, step by step.</span>
-      <a class="lh-btn lh-btn-light" href="{% url 'setup' %}">Open setup</a>
+      <strong>Serve aiuto?</strong>
+      <span>Segui la configurazione guidata, passo dopo passo.</span>
+      <a class="lh-btn lh-btn-light" href="{% url 'setup' %}">Apri la guida</a>
     </div>
-    <a class="lh-btn lh-btn-primary lh-btn-block" href="{% url 'setup' %}#test-lead">Send a test lead</a>
+    <a class="lh-btn lh-btn-primary lh-btn-block" href="{% url 'setup' %}#test-lead">Invia un lead di prova</a>
   </aside>
   {% endif %}
 
@@ -70,17 +70,17 @@ sidebar + top bar. Every block of the original is kept so stock admin pages rend
         <div id="user-tools" class="lh-topbar-tools">
           <form class="lh-search" action="{% url 'admin:leads_lead_changelist' %}" method="get" role="search">
             <svg aria-hidden="true"><use href="#lh-search"></use></svg>
-            <input type="search" name="q" placeholder="Search lead ID…" aria-label="Search leads">
+            <input type="search" name="q" placeholder="Cerca ID lead…" aria-label="Cerca lead">
           </form>
           {% block welcome-msg %}{% endblock %}
           {% block userlinks %}
-            <a class="lh-btn lh-btn-primary" href="{% url 'routing' %}#new-connection">+ New connection</a>
+            <a class="lh-btn lh-btn-primary" href="{% url 'routing' %}#new-connection">+ Nuova connessione</a>
             {% if user.has_usable_password %}
               <a class="lh-topbar-link" href="{% url 'admin:password_change' %}">{% firstof user.get_short_name user.get_username %}</a>
             {% endif %}
             <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
               {% csrf_token %}
-              <button type="submit" class="lh-topbar-link">{% translate 'Log out' %}</button>
+              <button type="submit" class="lh-topbar-link">Esci</button>
             </form>
             {% include "admin/color_theme_toggle.html" %}
           {% endblock %}

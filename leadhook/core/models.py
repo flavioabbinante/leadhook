@@ -37,37 +37,45 @@ def default_expiry():
 class Invitation(models.Model):
     """A single-use link that lets someone create their own admin account."""
 
-    email = models.EmailField(help_text="The invitation link is emailed here.")
+    email = models.EmailField(help_text="Il link di invito viene inviato a questo indirizzo.")
     groups = models.ManyToManyField(
         Group,
         blank=True,
         related_name="+",
-        help_text="What the new user may do. Ignored with full access.",
+        verbose_name="gruppi",
+        help_text="Cosa può fare il nuovo utente. Ignorato con l'accesso completo.",
     )
     is_superuser = models.BooleanField(
-        "Full access",
+        "Accesso completo",
         default=False,
-        help_text="Every permission, including inviting other people.",
+        help_text="Tutti i permessi, compreso invitare altre persone.",
     )
     # Only the hash is stored: the link is shown once and emailed, never kept in clear.
     token_hash = models.CharField(max_length=64, unique=True, editable=False)
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="+",
+        verbose_name="creato da",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(default=default_expiry)
-    accepted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField("creato il", auto_now_add=True)
+    expires_at = models.DateTimeField("scade il", default=default_expiry)
+    accepted_at = models.DateTimeField("accettato il", null=True, blank=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="+",
-        help_text="The account created from this invitation.",
+        verbose_name="utente",
+        help_text="L'account creato da questo invito.",
     )
 
     class Meta:
         ordering = ["-created_at"]
+        verbose_name = "invito"
+        verbose_name_plural = "inviti"
 
     def __str__(self) -> str:
         return self.email
@@ -84,5 +92,5 @@ class Invitation(models.Model):
     @property
     def status(self) -> str:
         if self.accepted_at:
-            return "Accepted"
-        return "Pending" if self.is_pending else "Expired"
+            return "Accettato"
+        return "In attesa" if self.is_pending else "Scaduto"

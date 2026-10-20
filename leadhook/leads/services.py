@@ -74,8 +74,8 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
     page = _resolve_page(lead)
     if page is None:
         lead.error = (
-            f"Unknown page {lead.page_external_id}: "
-            "connect it in the admin, then reprocess the lead."
+            f"Pagina sconosciuta {lead.page_external_id}: "
+            "collegala nel pannello, poi rielabora il lead."
         )
         lead.save(update_fields=["error", "updated_at"])
         return FetchOutcome.GIVE_UP
@@ -88,7 +88,7 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
         lead.error = str(exc)
         lead.save(update_fields=["page", "error", "updated_at"])
         if exc.is_token_error:
-            record_page_error(page, f"Meta rejected the page token: {exc}")
+            record_page_error(page, f"Meta ha rifiutato il token della pagina: {exc}")
             return FetchOutcome.GIVE_UP
         return FetchOutcome.RETRY if exc.is_transient else FetchOutcome.GIVE_UP
 
