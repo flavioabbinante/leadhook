@@ -21,14 +21,14 @@ class LeadAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    @admin.display(description="Pipeline")
+    @admin.display(description="Percorso")
     def pipeline(self, lead: Lead):
         steps, branches = lead_pipeline(lead)
         return render_to_string(
             "admin/leadhook_pipeline.html", {"steps": steps, "branches": branches}
         )
 
-    @admin.action(description="Reprocess selected leads")
+    @admin.action(description="Rielabora i lead selezionati")
     def reprocess(self, request, queryset):
         count = 0
         for lead in queryset:
@@ -44,7 +44,7 @@ class LeadAdmin(admin.ModelAdmin):
             count += 1
         self.message_user(
             request,
-            f"{count} lead(s) queued. Delivered or failed leads are resent from Deliveries.",
+            f"{count} lead messi in coda. I lead consegnati o falliti si reinviano da Consegne.",
         )
 
 
@@ -58,7 +58,7 @@ class WebhookEventAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    @admin.action(description="Process selected events")
+    @admin.action(description="Elabora gli eventi selezionati")
     def process_events(self, request, queryset):
         count = skipped = 0
         for event in queryset:
@@ -67,7 +67,7 @@ class WebhookEventAdmin(admin.ModelAdmin):
                 count += 1
             else:
                 skipped += 1
-        message = f"{count} event(s) queued for processing."
+        message = f"{count} eventi messi in coda per l'elaborazione."
         if skipped:
-            message += f" {skipped} skipped (already processed or invalid signature)."
+            message += f" {skipped} saltati (già elaborati o con firma non valida)."
         self.message_user(request, message)

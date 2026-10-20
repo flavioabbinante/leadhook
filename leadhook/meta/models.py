@@ -19,33 +19,38 @@ def default_graph_version() -> str:
 
 class MetaApp(models.Model):
     class TokenType(models.TextChoices):
-        SYSTEM_USER = "system_user", "System user (never expires)"
-        USER = "user", "User"
+        SYSTEM_USER = "system_user", "System User (non scade mai)"
+        USER = "user", "Utente"
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="meta_apps")
-    name = models.CharField(max_length=200)
-    app_id = models.CharField("App ID", max_length=64)
-    app_secret = EncryptedTextField()
-    verify_token = models.CharField(max_length=64, default=generate_verify_token)
-    webhook_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    access_token = EncryptedTextField(blank=True)
-    token_type = models.CharField(
-        max_length=20, choices=TokenType.choices, default=TokenType.SYSTEM_USER
+    name = models.CharField("nome", max_length=200)
+    app_id = models.CharField("ID app", max_length=64)
+    app_secret = EncryptedTextField("App secret")
+    verify_token = models.CharField(
+        "token di verifica", max_length=64, default=generate_verify_token
     )
-    token_expires_at = models.DateTimeField(null=True, blank=True)
-    graph_version = models.CharField(max_length=16, default=default_graph_version)
+    webhook_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    access_token = EncryptedTextField("token di accesso", blank=True)
+    token_type = models.CharField(
+        "tipo di token", max_length=20, choices=TokenType.choices, default=TokenType.SYSTEM_USER
+    )
+    token_expires_at = models.DateTimeField("scadenza del token", null=True, blank=True)
+    graph_version = models.CharField(
+        "versione Graph API", max_length=16, default=default_graph_version
+    )
     login_config_id = models.CharField(
-        "Login configuration ID",
+        "ID configurazione di accesso",
         max_length=64,
         blank=True,
         help_text=(
-            "Facebook Login for Business → Configurations. Choose a configuration with a "
-            "System-user access token so the connection never expires."
+            "Facebook Login for Business → Configurations. Scegli una configurazione con un "
+            "token di accesso System User, così il collegamento non scade mai."
         ),
     )
 
     class Meta:
-        verbose_name = "Meta app"
+        verbose_name = "app Meta"
+        verbose_name_plural = "app Meta"
 
     def __str__(self) -> str:
         return f"{self.name} ({self.app_id})"
@@ -59,43 +64,63 @@ class MetaApp(models.Model):
 
 
 class Page(models.Model):
-    meta_app = models.ForeignKey(MetaApp, on_delete=models.CASCADE, related_name="pages")
-    page_id = models.CharField("Page ID", max_length=64, unique=True)
-    name = models.CharField(max_length=255, blank=True)
-    page_token = EncryptedTextField(blank=True)
-    subscribed = models.BooleanField(default=False)
-    last_checked_at = models.DateTimeField(null=True, blank=True)
-    last_lead_at = models.DateTimeField(null=True, blank=True)
-    error = models.TextField(blank=True)
-    silence_alerted_at = models.DateTimeField(null=True, blank=True)
+    meta_app = models.ForeignKey(
+        MetaApp, on_delete=models.CASCADE, related_name="pages", verbose_name="app Meta"
+    )
+    page_id = models.CharField("ID pagina", max_length=64, unique=True)
+    name = models.CharField("nome", max_length=255, blank=True)
+    page_token = EncryptedTextField("token della pagina", blank=True)
+    subscribed = models.BooleanField("iscritta", default=False)
+    last_checked_at = models.DateTimeField("ultimo controllo", null=True, blank=True)
+    last_lead_at = models.DateTimeField("ultimo lead", null=True, blank=True)
+    error = models.TextField("errore", blank=True)
+    silence_alerted_at = models.DateTimeField("avviso di silenzio inviato", null=True, blank=True)
     default_destinations = models.ManyToManyField(
         "destinations.Destination",
         blank=True,
         related_name="default_for_pages",
-        help_text="Used for forms of this page that have no destinations of their own.",
+        verbose_name="destinazioni predefinite",
+        help_text="Usate per i moduli di questa pagina che non hanno destinazioni proprie.",
     )
 
+    class Meta:
+        verbose_name = "pagina"
+        verbose_name_plural = "pagine"
+
     def __str__(self) -> str:
-        return f"{self.name or 'Page'} ({self.page_id})"
+        return f"{self.name or 'Pagina'} ({self.page_id})"
 
 
 class Form(models.Model):
-    page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name="forms")
-    form_id = models.CharField("Form ID", max_length=64, unique=True)
-    name = models.CharField(max_length=255, blank=True)
-    locale = models.CharField(max_length=16, blank=True)
-    status = models.CharField(max_length=32, blank=True)
-    last_synced_at = models.DateTimeField(null=True, blank=True)
-    last_reconciled_at = models.DateTimeField(null=True, blank=True)
+    page = models.ForeignKey(
+        Page, on_delete=models.CASCADE, related_name="forms", verbose_name="pagina"
+    )
+    form_id = models.CharField("ID modulo", max_length=64, unique=True)
+    name = models.CharField("nome", max_length=255, blank=True)
+    locale = models.CharField("lingua", max_length=16, blank=True)
+    status = models.CharField("stato", max_length=32, blank=True)
+    last_synced_at = models.DateTimeField("ultima sincronizzazione", null=True, blank=True)
+    last_reconciled_at = models.DateTimeField("ultima riconciliazione", null=True, blank=True)
     questions = models.JSONField(
-        default=list, blank=True, help_text="The form's questions as Meta lists them (key, label)."
+        "domande",
+        default=list,
+        blank=True,
+        help_text="Le domande del modulo come le elenca Meta (chiave, etichetta).",
     )
     destinations = models.ManyToManyField(
         "destinations.Destination",
         blank=True,
         related_name="forms",
-        help_text="When set, these replace the page's default destinations for this form.",
+        verbose_name="destinazioni",
+        help_text=(
+            "Se impostate, sostituiscono le destinazioni predefinite della pagina "
+            "per questo modulo."
+        ),
     )
 
+    class Meta:
+        verbose_name = "modulo"
+        verbose_name_plural = "moduli"
+
     def __str__(self) -> str:
-        return f"{self.name or 'Form'} ({self.form_id})"
+        return f"{self.name or 'Modulo'} ({self.form_id})"

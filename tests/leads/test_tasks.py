@@ -134,7 +134,9 @@ def test_fetch_lead_token_error_flags_page_and_alerts(mailoutbox):
     fetch_lead(lead.pk)  # gives up without raising Retry
     lead.refresh_from_db()
     assert lead.status == Lead.Status.RECEIVED
-    assert Page.objects.get(page_id="111").error.startswith("Meta rejected the page token")
+    assert Page.objects.get(page_id="111").error.startswith(
+        "Meta ha rifiutato il token della pagina"
+    )
     assert len(mailoutbox) == 1
     assert "page-token" not in mailoutbox[0].body
 
@@ -146,4 +148,4 @@ def test_fetch_lead_exhaustion_alerts(mailoutbox):
     responses.get(f"{BASE}/333", status=500)
     fetch_lead(lead.pk, attempt=len(FETCH_BACKOFF))
     assert len(mailoutbox) == 1
-    assert "could not be read from Meta" in mailoutbox[0].body
+    assert "leggere il lead 333 da Meta" in mailoutbox[0].body

@@ -68,7 +68,7 @@ def test_fetch_lead_for_unknown_page_keeps_lead():
     assert fetch_lead_details(lead) == FetchOutcome.GIVE_UP
     lead.refresh_from_db()
     assert lead.status == Lead.Status.RECEIVED
-    assert "Unknown page 999" in lead.error
+    assert "Pagina sconosciuta 999" in lead.error
 
 
 @responses.activate
@@ -88,7 +88,7 @@ def test_token_error_flags_page_and_gives_up():
 @responses.activate
 def test_successful_fetch_clears_page_error():
     form = make_form()
-    form.page.error = "Meta rejected the page token"
+    form.page.error = "Meta ha rifiutato il token della pagina"
     form.page.save()
     responses.get(f"{BASE}/333", json=GRAPH_LEAD)
     fetch_lead_details(_received_lead())

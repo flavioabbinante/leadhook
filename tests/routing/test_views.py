@@ -18,11 +18,11 @@ def test_routing_page_lists_pages_forms_and_destinations(admin_client):
     destination = make_destination(name="CRM intake")
     form.page.default_destinations.add(destination)
     html = admin_client.get(ROUTING).content.decode()
-    assert "New connection" in html
+    assert "Nuova connessione" in html
     assert f'value="form:{form.pk}"' in html
     assert f'value="page:{form.page.pk}"' in html
     assert "CRM intake" in html
-    assert "Page default:" in html  # the form inherits the page default
+    assert "Predefinito della pagina:" in html  # the form inherits the page default
 
 
 def test_connect_form_to_destination(admin_client):
@@ -34,7 +34,7 @@ def test_connect_form_to_destination(admin_client):
         follow=True,
     )
     assert list(form.destinations.all()) == [destination]
-    assert "now go to" in _messages(response)
+    assert "ora vanno a" in _messages(response)
 
 
 def test_connect_page_default_and_disconnect(admin_client):
@@ -58,7 +58,7 @@ def test_connecting_points_to_waiting_leads_and_deliver_now_routes_them(admin_cl
     response = admin_client.post(
         ROUTING, {"action": "connect", "source": source, "destination": destination.pk}, follow=True
     )
-    assert "were waiting for a destination" in _messages(response)
+    assert "erano in attesa di una destinazione" in _messages(response)
     with responses.RequestsMock() as mock:
         mock.post(destination.url, json={})
         admin_client.post(ROUTING, {"action": "deliver_waiting", "source": source})
@@ -74,7 +74,7 @@ def test_invalid_source_is_rejected(admin_client):
         {"action": "connect", "source": "page:999", "destination": destination.pk},
         follow=True,
     )
-    assert "Choose where the leads come from" in _messages(response)
+    assert "Scegli da dove arrivano i lead" in _messages(response)
 
 
 def test_staff_without_change_permission_cannot_connect(client):

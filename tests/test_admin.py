@@ -119,7 +119,7 @@ def test_destination_payload_preview_shows_template_errors(admin_client):
     content = admin_client.get(
         reverse("admin:destinations_destination_change", args=[destination.pk])
     ).content.decode()
-    assert "Template error" in content
+    assert "Errore nel template" in content
 
 
 def test_resend_action(admin_client):
@@ -187,7 +187,7 @@ def test_destination_form_validates_auth(admin_client):
         },
     )
     assert response.status_code == 200
-    assert "Required for the selected authentication." in response.content.decode()
+    assert "autenticazione scelta." in response.content.decode()
 
 
 def test_resend_action_skips_deliveries_in_progress_or_scheduled(admin_client):
@@ -215,9 +215,9 @@ def test_resend_action_skips_deliveries_in_progress_or_scheduled(admin_client):
     assert in_flight.locked_until == lease
     messages = [str(m) for m in get_messages(response.wsgi_request)]
     assert any(
-        "2 deliveries queued" in m
-        and "1 skipped" in m
-        and "in progress, scheduled, or lead data purged" in m
+        "2 consegne messe in coda" in m
+        and "1 saltate" in m
+        and "in corso, programmate o con i dati del lead eliminati" in m
         for m in messages
     )
 
@@ -236,13 +236,13 @@ def test_process_events_action(admin_client):
         )
     delay.assert_called_once_with(pending.pk)
     messages = [str(m) for m in get_messages(response.wsgi_request)]
-    assert any("1 event(s) queued" in m and "2 skipped" in m for m in messages)
+    assert any("1 eventi messi in coda" in m and "2 saltati" in m for m in messages)
 
 
 def test_destination_extra_headers_help_warns_about_clear_text(admin_client):
     content = admin_client.get(reverse("admin:destinations_destination_add")).content.decode()
-    assert "Stored in clear text" in content
-    assert "put credentials in Secret, not here" in content
+    assert "Salvati in chiaro" in content
+    assert "metti le credenziali in Chiave segreta, non qui" in content
 
 
 def test_page_and_destination_change_pages_never_show_secrets(admin_client):
@@ -260,7 +260,7 @@ def test_page_and_destination_change_pages_never_show_secrets(admin_client):
     ]:
         html = admin_client.get(url).content.decode()
         assert secret not in html
-        assert f"Stored: ••••{tail}" in html
+        assert f"Salvato: ••••{tail}" in html
 
 
 def test_saving_destination_without_secret_keeps_it(admin_client):
@@ -297,18 +297,18 @@ def test_saving_destination_without_secret_keeps_it(admin_client):
 
 def test_dashboard_shows_counts_and_page_health(admin_client):
     lead = make_lead(status=Lead.Status.UNROUTED)
-    Page.objects.filter(pk=lead.page.pk).update(error="Meta rejected the page token: x")
+    Page.objects.filter(pk=lead.page.pk).update(error="Meta ha rifiutato il token della pagina: x")
     failed = make_lead(leadgen_id="2", form=lead.form, status=Lead.Status.FAILED)
     Delivery.objects.create(
         lead=failed, destination=make_destination(), status=Delivery.Status.FAILED
     )
     html = admin_client.get(reverse("admin:index")).content.decode()
-    assert "Leads today" in html
-    assert "Meta rejected the page token: x" in html
+    assert "Lead di oggi" in html
+    assert "Meta ha rifiutato il token della pagina: x" in html
     assert 'href="/admin/routing/"' in html  # unrouted leads are fixed in Routing
     assert "?status__exact=failed" in html
     assert html.count('<span class="lh-kpi-value">1</span>') == 2  # failed deliveries, unrouted
-    assert "Not running" in html  # no heartbeat recorded in tests
+    assert "Non attivi" in html  # no heartbeat recorded in tests
 
 
 def test_payload_preview_lead_chooser_is_per_request(admin_client):
@@ -317,7 +317,7 @@ def test_payload_preview_lead_chooser_is_per_request(admin_client):
     make_lead(leadgen_id="2", form=first.form)
     url = reverse("admin:destinations_destination_change", args=[destination.pk])
     html = admin_client.get(url + "?preview_lead=1").content.decode()
-    assert "Using lead 1" in html
+    assert "Lead usato: 1" in html
     assert 'href="?preview_lead=2"' in html
     assert not hasattr(django_admin.site._registry[Destination], "_preview_lead_id")
 
@@ -339,7 +339,7 @@ def test_saving_form_with_destinations_offers_unrouted_leads(admin_client):
         follow=True,
     )
     text = " ".join(str(m) for m in get_messages(response.wsgi_request))
-    assert "1 unrouted lead(s)" in text
+    assert "1 lead senza instradamento" in text
     assert f"form__id__exact={form.pk}" in text
 
 

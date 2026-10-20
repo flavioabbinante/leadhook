@@ -57,28 +57,30 @@ def check_destination_url(url: str) -> None:
         port = parts.port
         hostname = parts.hostname
     except ValueError:
-        raise BlockedDestination("Invalid destination URL (malformed host or port)") from None
+        raise BlockedDestination(
+            "URL della destinazione non valido (host o porta malformati)"
+        ) from None
     # Never echo credentials, path or query from the URL in messages.
     shown = f"{parts.scheme}://{hostname}"
     if parts.scheme not in ("http", "https") or not hostname:
-        raise BlockedDestination(f"Unsupported destination URL ({shown})")
+        raise BlockedDestination(f"URL della destinazione non supportato ({shown})")
     try:
         hostname.encode("idna")
     except UnicodeError:
-        raise BlockedDestination(f"Invalid destination host name ({shown})") from None
+        raise BlockedDestination(f"Nome host della destinazione non valido ({shown})") from None
     if settings.ALLOW_PRIVATE_DESTINATIONS:
         return
     port = port or (443 if parts.scheme == "https" else 80)
     try:
         addresses = resolve_host(hostname, port)
     except UnicodeError:
-        raise BlockedDestination(f"Invalid destination host name ({shown})") from None
+        raise BlockedDestination(f"Nome host della destinazione non valido ({shown})") from None
     for address in addresses:
         ip = ipaddress.ip_address(address.split("%", 1)[0])
         if not ip.is_global:
             raise BlockedDestination(
-                f"Destination {shown} resolves to a non-public address ({ip}). "
-                "Set ALLOW_PRIVATE_DESTINATIONS=true to allow it."
+                f"La destinazione {shown} punta a un indirizzo non pubblico ({ip}). "
+                "Imposta ALLOW_PRIVATE_DESTINATIONS=true per consentirlo."
             )
 
 
@@ -87,8 +89,8 @@ def _check_peer(sock) -> None:
     if not ip.is_global:
         sock.close()
         raise BlockedDestination(
-            f"Connection to a non-public address ({ip}) was blocked. "
-            "Set ALLOW_PRIVATE_DESTINATIONS=true to allow it."
+            f"Connessione a un indirizzo non pubblico ({ip}) bloccata. "
+            "Imposta ALLOW_PRIVATE_DESTINATIONS=true per consentirla."
         )
 
 
@@ -213,7 +215,7 @@ def send_request(destination: Destination, body: str, headers: dict) -> SendResu
     except BlockedDestination as exc:
         return SendResult("fail", error=str(exc))
     except OSError as exc:
-        return SendResult("retry", error=f"DNS resolution failed: {exc}")
+        return SendResult("retry", error=f"Risoluzione DNS non riuscita: {exc}")
 
     try:
         with requests.Session() as session:
@@ -256,7 +258,7 @@ def send_request(destination: Destination, body: str, headers: dict) -> SendResu
             except TemplateError as exc:
                 return SendResult("fail", status, str(exc), text)
             if not ok:
-                return SendResult("retry", status, "Success condition not met", text)
+                return SendResult("retry", status, "Condizione di successo non soddisfatta", text)
         return SendResult("success", status, "", text)
 
     retry_after = parse_retry_after(response.headers.get("Retry-After"))

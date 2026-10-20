@@ -9,49 +9,49 @@ NAVIGATION = [
         "",
         [
             ("admin:index", "Dashboard", "home", ""),
-            ("setup", "Setup", "wand", ""),
+            ("setup", "Configurazione guidata", "wand", ""),
         ],
     ),
     (
-        "Pipeline",
+        "Flusso",
         [
-            ("admin:leads_lead_changelist", "Leads", "inbox", "leads.view_lead"),
+            ("admin:leads_lead_changelist", "Lead", "inbox", "leads.view_lead"),
             (
                 "admin:destinations_delivery_changelist",
-                "Deliveries",
+                "Consegne",
                 "send",
                 "destinations.view_delivery",
             ),
             (
                 "admin:leads_webhookevent_changelist",
-                "Webhook events",
+                "Eventi webhook",
                 "zap",
                 "leads.view_webhookevent",
             ),
         ],
     ),
     (
-        "Configuration",
+        "Configurazione",
         # In setup order: connect Meta, pick pages and forms, add a CRM, then route.
         [
-            ("admin:meta_metaapp_changelist", "Meta apps", "box", "meta.view_metaapp"),
-            ("admin:meta_page_changelist", "Pages", "flag", "meta.view_page"),
-            ("admin:meta_form_changelist", "Forms", "list", "meta.view_form"),
+            ("admin:meta_metaapp_changelist", "App Meta", "box", "meta.view_metaapp"),
+            ("admin:meta_page_changelist", "Pagine", "flag", "meta.view_page"),
+            ("admin:meta_form_changelist", "Moduli", "list", "meta.view_form"),
             (
                 "admin:destinations_destination_changelist",
-                "Destinations",
+                "Destinazioni",
                 "target",
                 "destinations.view_destination",
             ),
-            ("routing", "Routing", "shuffle", "meta.view_form"),
+            ("routing", "Instradamento", "shuffle", "meta.view_form"),
         ],
     ),
     (
         "Account",
         [
-            ("admin:auth_user_changelist", "Users", "users", "auth.view_user"),
-            ("admin:core_invitation_changelist", "Invitations", "mail", "core.view_invitation"),
-            ("admin:auth_group_changelist", "Groups", "shield", "auth.view_group"),
+            ("admin:auth_user_changelist", "Utenti", "users", "auth.view_user"),
+            ("admin:core_invitation_changelist", "Inviti", "mail", "core.view_invitation"),
+            ("admin:auth_group_changelist", "Gruppi", "shield", "auth.view_group"),
         ],
     ),
 ]

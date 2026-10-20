@@ -30,10 +30,10 @@ def create_deliveries(lead: Lead) -> list[Delivery]:
         if lead.status != Lead.Status.UNROUTED:
             send_alert(
                 AlertKind.UNROUTED,
-                "Lead not routed",
-                f"Lead {lead.leadgen_id} (page {lead.page_external_id}, form "
-                f"{lead.form_external_id}) has no active destination. Assign one to the form "
-                "or a default to the page, then reprocess the lead.",
+                "Lead non instradato",
+                f"Il lead {lead.leadgen_id} (pagina {lead.page_external_id}, modulo "
+                f"{lead.form_external_id}) non ha destinazioni attive. Assegnane una al modulo "
+                "o una predefinita alla pagina, poi rielabora il lead.",
             )
         lead.status = Lead.Status.UNROUTED
         lead.save(update_fields=["status", "updated_at"])
@@ -57,8 +57,8 @@ def describe_unexpected_error(exc: Exception, destination) -> str:
     if isinstance(exc, UnicodeError):
         # The message would quote the offending character of a header (possibly the secret).
         return (
-            f"{type(exc).__name__}: a header name or value contains characters that cannot "
-            "be sent (only Latin-1 is allowed, without line breaks)"
+            f"{type(exc).__name__}: il nome o il valore di un header contiene caratteri che non "
+            "si possono inviare (solo Latin-1, senza a capo)"
         )
     message = f"{type(exc).__name__}: {exc}"
     if destination.secret:
@@ -116,7 +116,7 @@ def attempt_delivery(delivery: Delivery, *, now: datetime | None = None) -> Send
     except Exception as exc:
         error = describe_unexpected_error(exc, destination)
         logger.error("Delivery %s failed with an unexpected error: %s", delivery.pk, error)
-        result = SendResult("fail", error=f"Unexpected error: {error}")
+        result = SendResult("fail", error=f"Errore imprevisto: {error}")
 
     delivery.request_body = body
     delivery.response_body = result.response_body
@@ -204,8 +204,8 @@ def mark_delivery_failed(
         delivery.save(update_fields=[*fields, "updated_at"])
     send_alert(
         AlertKind.DELIVERY_FAILED,
-        f"Delivery to {delivery.destination} failed",
-        f"Lead {delivery.lead.leadgen_id} could not be delivered to {delivery.destination} "
+        f"Consegna a {delivery.destination} fallita",
+        f"Il lead {delivery.lead.leadgen_id} non è stato consegnato a {delivery.destination} "
         f"({delivery.public_id}): {error}",
     )
     return True

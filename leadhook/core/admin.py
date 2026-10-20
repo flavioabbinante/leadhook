@@ -28,6 +28,10 @@ class InvitationAdmin(admin.ModelAdmin):
         # Sent invitations are read-only; delete one to revoke it.
         return False
 
+    @admin.display(description="Stato")
+    def status(self, obj):
+        return obj.status
+
     def save_model(self, request, obj, form, change):
         obj.created_by = request.user
         token = obj.issue_token()
@@ -35,11 +39,13 @@ class InvitationAdmin(admin.ModelAdmin):
         link = invitation_link(token)
         try:
             send_invitation(obj, link)
-            sent = f"Emailed to {obj.email}."
+            sent = f"Inviato via email a {obj.email}."
         except OSError:
-            sent = "The email could not be sent; share the link yourself."
+            sent = "Non è stato possibile inviare l'email: condividi tu il link."
         self.message_user(
             request,
-            format_html("{} This link is shown only once: <code>{}</code>", sent, link),
+            format_html(
+                "{} Questo link viene mostrato una sola volta: <code>{}</code>", sent, link
+            ),
             messages.WARNING,
         )

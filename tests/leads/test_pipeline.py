@@ -20,12 +20,12 @@ def test_pipeline_of_a_delivered_lead_branches_per_destination():
     )
     steps, branches = lead_pipeline(lead)
     assert [s.state for s in steps] == ["done", "done", "done", "done"]
-    assert steps[3].detail == "2 destination(s)"
+    assert steps[3].detail == "Destinazioni: 2"
     assert [(b.title, b.icon, b.state) for b in branches] == [
         ("CRM", "target", "done"),
         ("Chat", "send", "error"),
     ]
-    assert branches[1].detail == "Failed · HTTP 400 · 3 attempts"
+    assert branches[1].detail == "Fallita · HTTP 400 · 3 tentativi"
 
 
 def test_pipeline_shows_where_a_lead_stopped():

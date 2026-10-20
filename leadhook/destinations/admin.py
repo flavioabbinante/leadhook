@@ -29,8 +29,8 @@ class DestinationForm(SecretAwareModelForm):
         exclude = ("workspace",)
         help_texts = {
             "extra_headers": (
-                'Additional headers as a JSON object, e.g. {"X-Source": "leadhook"}. '
-                "Stored in clear text — put credentials in Secret, not here."
+                'Header aggiuntivi come oggetto JSON, es. {"X-Source": "leadhook"}. '
+                "Salvati in chiaro: metti le credenziali in Chiave segreta, non qui."
             ),
         }
 
@@ -68,23 +68,23 @@ def source_choices(destination: Destination | None) -> list:
             key = source.removeprefix("answer:")
             if source.startswith("answer:") and key not in questions:
                 questions[key] = key
-                answers.append((source, f"{key} (not in the linked forms)"))
+                answers.append((source, f"{key} (non presente nei moduli collegati)"))
     return [
         ("", "---------"),
-        ("Form answers", answers),
+        ("Risposte del modulo", answers),
         (
-            "Lead details",
+            "Dati del lead",
             [(f"lead:{path}", label) for path, label in FieldMapping.LEAD_SOURCES.items()],
         ),
-        ("Other", [(FieldMapping.FIXED, "Fixed value")]),
+        ("Altro", [(FieldMapping.FIXED, "Valore fisso")]),
     ]
 
 
 class FieldMappingInline(admin.TabularInline):
     model = FieldMapping
     extra = 3
-    verbose_name = "field"
-    verbose_name_plural = "Fields to send"
+    verbose_name = "campo"
+    verbose_name_plural = "Campi da inviare"
 
     def get_formset(self, request, obj=None, **kwargs):
         kwargs["formfield_callback"] = partial(
@@ -123,16 +123,16 @@ class DestinationAdmin(admin.ModelAdmin):
                 "classes": ("lh-kind-telegram",),
                 "fields": ("telegram_chat_id", "message_template", "message_fields"),
                 "description": (
-                    "1. Create a bot with @BotFather and paste its token in Bot token.<br>"
-                    "2. Add the bot to the chat or group and send it a message.<br>"
-                    "3. Open api.telegram.org/bot&lt;token&gt;/getUpdates and copy chat.id here."
+                    "1. Crea un bot con @BotFather e incolla il suo token in Token del bot.<br>"
+                    "2. Aggiungi il bot alla chat o al gruppo e mandagli un messaggio.<br>"
+                    "3. Apri api.telegram.org/bot&lt;token&gt;/getUpdates e copia qui chat.id."
                 ),
             },
         ),
-        ("Secret", {"fields": ("secret",)}),
-        ("Preview", {"fields": ("payload_preview",)}),
+        ("Chiave segreta", {"fields": ("secret",)}),
+        ("Anteprima", {"fields": ("payload_preview",)}),
         (
-            "Advanced",
+            "Avanzate",
             {
                 "classes": ("collapse", "lh-kind-webhook"),
                 "fields": ("payload_template", "extra_headers", "success_condition", "timeout_s"),
@@ -156,7 +156,7 @@ class DestinationAdmin(admin.ModelAdmin):
             obj._preview_lead_id = request.GET.get("preview_lead")
         return obj
 
-    @admin.display(description="Insert a field")
+    @admin.display(description="Inserisci un campo")
     def message_fields(self, obj: Destination):
         forms = list(routed_forms(obj if obj.pk else None))
         return render_to_string(
@@ -167,15 +167,15 @@ class DestinationAdmin(admin.ModelAdmin):
             },
         )
 
-    @admin.display(description="Payload preview")
+    @admin.display(description="Anteprima del payload")
     def payload_preview(self, obj: Destination):
         if not obj.pk:
-            return "Save the destination to see a preview."
+            return "Salva la destinazione per vedere l'anteprima."
         leads = Lead.objects.exclude(status=Lead.Status.RECEIVED).filter(purged_at__isnull=True)
         lead_id = getattr(obj, "_preview_lead_id", None)
         lead = leads.filter(leadgen_id=lead_id).first() if lead_id else leads.first()
         if lead is None:
-            return "No fetched leads yet."
+            return "Nessun lead scaricato finora."
         context = build_context(
             lead, Delivery(lead=lead, destination=obj), attempt=1, sent_at=timezone.now()
         )
@@ -189,7 +189,10 @@ class DestinationAdmin(admin.ModelAdmin):
             ((other.leadgen_id, other.leadgen_id) for other in leads[:10]),
         )
         return format_html(
-            "<p>Using lead {}. Preview another: {}</p><pre>{}</pre>", lead.leadgen_id, others, body
+            "<p>Lead usato: {}. Vedi l'anteprima con un altro: {}</p><pre>{}</pre>",
+            lead.leadgen_id,
+            others,
+            body,
         )
 
 
@@ -212,7 +215,7 @@ class DeliveryAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    @admin.action(description="Resend selected deliveries")
+    @admin.action(description="Reinvia le consegne selezionate")
     def resend(self, request, queryset):
         count = skipped = 0
         for delivery in queryset.select_related("lead"):
@@ -223,9 +226,11 @@ class DeliveryAdmin(admin.ModelAdmin):
                 count += 1
             else:
                 skipped += 1
-        message = f"{count} deliveries queued for resending."
+        message = f"{count} consegne messe in coda per il reinvio."
         if skipped:
-            message += f" {skipped} skipped (in progress, scheduled, or lead data purged)."
+            message += (
+                f" {skipped} saltate (in corso, programmate o con i dati del lead eliminati)."
+            )
         self.message_user(request, message)
 
 

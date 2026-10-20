@@ -35,24 +35,26 @@ def lead_pipeline(lead: Lead) -> tuple[list[Step], list[Step]]:
     status = lead.status
     form = lead.form.name if lead.form else lead.form_external_id
     # Meta's created_time is when the person sent the form, before the webhook reached us.
-    submitted = Step("Form submitted", "list", "done", form, _when(lead.created_time))
+    submitted = Step("Modulo inviato", "list", "done", form, _when(lead.created_time))
     received = Step(
-        lead.get_source_display(), "zap", "done", "Lead received", _when(lead.received_at)
+        lead.get_source_display(), "zap", "done", "Lead ricevuto", _when(lead.received_at)
     )
 
     if status == Lead.Status.RECEIVED:
-        fetched = Step("Lead details", "box", "error" if lead.error else "pending", lead.error)
+        fetched = Step("Dati del lead", "box", "error" if lead.error else "pending", lead.error)
     else:
-        answers = "Data purged by retention" if lead.purged_at else f"{len(lead.data)} answers"
-        fetched = Step("Lead details", "box", "done", f"Read from Meta · {answers}")
+        answers = "Dati cancellati per scadenza" if lead.purged_at else f"{len(lead.data)} risposte"
+        fetched = Step("Dati del lead", "box", "done", f"Letto da Meta · {answers}")
 
     deliveries = list(lead.deliveries.select_related("destination").order_by("id"))
     if status in (Lead.Status.RECEIVED, Lead.Status.FETCHED):
-        routing = Step("Routing", "shuffle", "pending", "Waiting")
+        routing = Step("Instradamento", "shuffle", "pending", "In attesa")
     elif status == Lead.Status.UNROUTED:
-        routing = Step("Routing", "shuffle", "error", "No active destination for this form")
+        routing = Step(
+            "Instradamento", "shuffle", "error", "Nessuna destinazione attiva per questo modulo"
+        )
     else:
-        routing = Step("Routing", "shuffle", "done", f"{len(deliveries)} destination(s)")
+        routing = Step("Instradamento", "shuffle", "done", f"Destinazioni: {len(deliveries)}")
 
     branches = []
     for delivery in deliveries:
@@ -60,9 +62,9 @@ def lead_pipeline(lead: Lead) -> tuple[list[Step], list[Step]]:
         if delivery.last_status_code:
             parts.append(f"HTTP {delivery.last_status_code}")
         if delivery.attempts > 1:
-            parts.append(f"{delivery.attempts} attempts")
+            parts.append(f"{delivery.attempts} tentativi")
         if delivery.status == Delivery.Status.PENDING and delivery.next_retry_at:
-            parts.append(f"retry {_when(delivery.next_retry_at)}")
+            parts.append(f"nuovo tentativo {_when(delivery.next_retry_at)}")
         destination = delivery.destination
         branches.append(
             Step(

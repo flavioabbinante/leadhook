@@ -31,7 +31,9 @@ def record_page_error(page: Page, message: str) -> None:
     page.error = message
     page.save(update_fields=["error"])
     if is_new:
-        send_alert(AlertKind.PAGE_ERROR, f"Problem with page {page.page_id}", f"{page}: {message}")
+        send_alert(
+            AlertKind.PAGE_ERROR, f"Problema con la pagina {page.page_id}", f"{page}: {message}"
+        )
 
 
 def form_questions(raw: dict) -> list[dict]:
@@ -81,8 +83,8 @@ def check_meta_app(meta_app: MetaApp, *, now: datetime) -> None:
     if not info.get("is_valid"):
         send_alert(
             AlertKind.PAGE_ERROR,
-            f"Meta app {meta_app.app_id}: invalid access token",
-            f"The access token of {meta_app} is no longer valid. Replace it in the admin.",
+            f"App Meta {meta_app.app_id}: token di accesso non valido",
+            f"Il token di accesso di {meta_app} non è più valido. Sostituiscilo nell'admin.",
         )
         return
     expires = info.get("expires_at") or 0
@@ -93,9 +95,9 @@ def check_meta_app(meta_app: MetaApp, *, now: datetime) -> None:
     if expires_at - now < TOKEN_EXPIRY_WARNING:
         send_alert(
             AlertKind.PAGE_ERROR,
-            f"Meta app {meta_app.app_id}: access token expires soon",
-            f"The access token of {meta_app} expires on {expires_at:%Y-%m-%d}. "
-            "Replace it in the admin before then (a System User token never expires).",
+            f"App Meta {meta_app.app_id}: il token di accesso scade presto",
+            f"Il token di accesso di {meta_app} scade il {expires_at:%d/%m/%Y}. "
+            "Sostituiscilo nell'admin prima di allora (un token System User non scade mai).",
         )
 
 
@@ -110,9 +112,9 @@ def check_page(page: Page, *, now: datetime) -> None:
             logger.warning("Check of page %s skipped: %s", page.page_id, exc)
             return
         if exc.is_token_error:
-            record_page_error(page, f"Meta rejected the page token: {exc}")
+            record_page_error(page, f"Meta ha rifiutato il token della pagina: {exc}")
         else:
-            record_page_error(page, f"Could not subscribe the page to lead events: {exc}")
+            record_page_error(page, f"Impossibile iscrivere la pagina agli eventi dei lead: {exc}")
         Page.objects.filter(pk=page.pk).update(last_checked_at=now)
         return
     Page.objects.filter(pk=page.pk).update(subscribed=True, error="", last_checked_at=now)
