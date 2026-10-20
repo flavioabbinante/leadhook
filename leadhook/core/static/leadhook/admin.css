@@ -390,6 +390,9 @@ svg { width: 18px; height: 18px; }
 .lh-shell .form-row { padding: 12px 20px; border-bottom: 1px solid var(--lh-line); }
 .lh-shell .submit-row { padding: 14px 20px; margin: 20px 0; }
 .lh-shell .inline-group { overflow: hidden; }
+/* Tabular inlines repeat each row's name above its first input; the input already shows it. */
+.lh-shell .inline-group td.original p { display: none; }
+.lh-shell .inline-group tr.has_original td { padding-top: 8px; }
 
 .lh-shell input[type=text], .lh-shell input[type=password], .lh-shell input[type=email],
 .lh-shell input[type=url], .lh-shell input[type=number], .lh-shell input[type=search],
@@ -788,3 +791,8 @@ html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3
   .lh-help-card { display: none; }
   .lh-nav-link { padding-top: 4px; padding-bottom: 4px; }
 }
+
+/* Collapsible manual fallback inside a setup step. */
+.lh-details { margin-top: 14px; }
+.lh-details summary { cursor: pointer; color: var(--lh-muted); font-weight: 600; font-size: 13px; }
+.lh-details[open] summary { margin-bottom: 10px; }

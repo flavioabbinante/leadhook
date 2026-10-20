@@ -52,7 +52,10 @@ class Destination(models.Model):
     )
     payload_template = models.TextField(
         blank=True,
-        help_text="Jinja2 template producing JSON. Leave empty for the standard payload.",
+        help_text=(
+            "For experts: a Jinja2 template producing JSON. When filled, it replaces the "
+            "fields to send. Leave both empty for the standard payload."
+        ),
     )
     success_condition = models.TextField(
         blank=True,
@@ -102,6 +105,50 @@ class Destination(models.Model):
                 errors["secret"] = f"The secret is sent as a header value and {problem}."
         if errors:
             raise ValidationError(errors)
+
+
+class FieldMapping(models.Model):
+    """One field of a destination's payload and where its value comes from."""
+
+    FIXED = "fixed"
+    # source values: "fixed", "answer:<question key>" or "lead:<path in the standard payload>".
+    LEAD_SOURCES = {
+        "id": "Meta lead ID",
+        "created_time": "Date the lead was created",
+        "form.name": "Form name",
+        "page.name": "Page name",
+        "campaign.name": "Campaign name",
+        "adset.name": "Ad set name",
+        "ad.name": "Ad name",
+    }
+
+    class Transform(models.TextChoices):
+        NONE = "", "As is"
+        FIRST_WORD = "first_word", "First word (first name)"
+        REST_WORDS = "rest_words", "Other words (last name)"
+        STRIP_PLUS39 = "strip_plus39", "Phone without +39"
+
+    destination = models.ForeignKey(
+        Destination, on_delete=models.CASCADE, related_name="field_mappings"
+    )
+    target = models.CharField(
+        "Field name", max_length=200, help_text="As the CRM calls it. A dot nests: fields.email"
+    )
+    source = models.CharField("Value", max_length=200)
+    fixed_value = models.CharField(
+        max_length=500, blank=True, help_text="Only for “Fixed value”. Numbers stay numbers."
+    )
+    transform = models.CharField(max_length=20, choices=Transform.choices, blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return self.target
+
+    def clean(self) -> None:
+        if any(not part.strip() for part in self.target.split(".")):
+            raise ValidationError({"target": "Write a name before and after each dot."})
 
 
 class Delivery(models.Model):

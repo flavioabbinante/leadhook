@@ -1,14 +1,18 @@
 import json
+from functools import partial
 
+from django import forms
 from django.contrib import admin
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
 from leadhook.core.admin_forms import SecretAwareModelForm
 from leadhook.core.models import get_default_workspace
 from leadhook.leads.models import Lead
+from leadhook.meta.models import Form
 
-from .models import Delivery, Destination
+from .models import Delivery, Destination, FieldMapping
 from .payload import build_context, render_body
 from .services import reset_for_resend
 from .tasks import deliver
@@ -29,6 +33,63 @@ class DestinationForm(SecretAwareModelForm):
         }
 
 
+def source_choices(destination: Destination | None) -> list:
+    """Dropdown of the Value column: form questions, lead details and a fixed value.
+
+    Questions come from the forms routed to the destination, or from every form while none is.
+    """
+    forms_with_questions = Form.objects.exclude(questions=[])
+    if destination is not None:
+        # Same rule as routing: a form's own destinations replace its page's defaults.
+        routed = forms_with_questions.filter(
+            Q(destinations=destination)
+            | Q(page__default_destinations=destination, destinations=None)
+        ).distinct()
+        if routed.exists():
+            forms_with_questions = routed
+    questions: dict[str, str] = {}
+    for form in forms_with_questions.only("questions"):
+        for question in form.questions:
+            questions.setdefault(question["key"], question["label"])
+    answers = [(f"answer:{key}", f"{label} ({key})") for key, label in sorted(questions.items())]
+    if destination is not None:
+        # Keep saved answers selectable even when no routed form asks them any more.
+        for source in destination.field_mappings.values_list("source", flat=True):
+            key = source.removeprefix("answer:")
+            if source.startswith("answer:") and key not in questions:
+                questions[key] = key
+                answers.append((source, f"{key} (not in the linked forms)"))
+    return [
+        ("", "---------"),
+        ("Form answers", answers),
+        (
+            "Lead details",
+            [(f"lead:{path}", label) for path, label in FieldMapping.LEAD_SOURCES.items()],
+        ),
+        ("Other", [(FieldMapping.FIXED, "Fixed value")]),
+    ]
+
+
+class FieldMappingInline(admin.TabularInline):
+    model = FieldMapping
+    extra = 3
+    verbose_name = "field"
+    verbose_name_plural = "Fields to send"
+
+    def get_formset(self, request, obj=None, **kwargs):
+        kwargs["formfield_callback"] = partial(
+            self.formfield_for_dbfield, request=request, destination=obj
+        )
+        return super().get_formset(request, obj, **kwargs)
+
+    def formfield_for_dbfield(self, db_field, request, destination=None, **kwargs):
+        if db_field.name == "source":
+            return forms.ChoiceField(
+                label=db_field.verbose_name, choices=source_choices(destination)
+            )
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+
 @admin.register(Destination)
 class DestinationAdmin(admin.ModelAdmin):
     form = DestinationForm
@@ -36,6 +97,19 @@ class DestinationAdmin(admin.ModelAdmin):
     list_filter = ("active", "auth_type")
     search_fields = ("name", "url")
     readonly_fields = ("payload_preview",)
+    inlines = (FieldMappingInline,)
+    fieldsets = (
+        (None, {"fields": ("name", "kind", "url", "method", "active")}),
+        ("Authentication", {"fields": ("auth_type", "auth_header_name", "secret")}),
+        ("Preview", {"fields": ("payload_preview",)}),
+        (
+            "Advanced",
+            {
+                "classes": ("collapse",),
+                "fields": ("payload_template", "extra_headers", "success_condition", "timeout_s"),
+            },
+        ),
+    )
 
     def save_model(self, request, obj, form, change):
         if not change:

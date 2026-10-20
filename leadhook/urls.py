@@ -4,6 +4,7 @@ from django.views.generic import RedirectView
 
 from leadhook.core.invitations import accept_invitation
 from leadhook.core.views import health
+from leadhook.meta.facebook_login import facebook_callback, facebook_login
 from leadhook.meta.setup import setup_view
 from leadhook.meta.views import meta_webhook
 from leadhook.routing.views import routing_view
@@ -18,6 +19,12 @@ admin.site.index_template = "admin/leadhook_index.html"
 urlpatterns = [
     path("", RedirectView.as_view(url="/admin/", permanent=False)),
     path("admin/setup/", admin.site.admin_view(setup_view), name="setup"),
+    path("admin/setup/facebook/", admin.site.admin_view(facebook_login), name="facebook-login"),
+    path(
+        "admin/setup/facebook/callback/",
+        admin.site.admin_view(facebook_callback),
+        name="facebook-callback",
+    ),
     path("admin/routing/", admin.site.admin_view(routing_view), name="routing"),
     path("admin/", admin.site.urls),
     path("invite/<str:token>/", accept_invitation, name="accept-invitation"),

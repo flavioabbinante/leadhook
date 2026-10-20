@@ -1,7 +1,7 @@
 import responses
 from django.urls import reverse
 
-from leadhook.meta.models import Form, Page
+from leadhook.meta.models import Form, MetaApp, Page
 from tests.factories import make_destination, make_form, make_meta_app, make_page
 from tests.fixtures import GRAPH_FORM
 
@@ -16,8 +16,29 @@ def test_setup_requires_staff(client):
     assert "/admin/login/" in response["Location"]
 
 
-def test_setup_links_to_meta_app_form_first(admin_client):
-    assert reverse("admin:meta_metaapp_add") in admin_client.get(SETUP).content.decode()
+def test_setup_asks_for_app_credentials_first(admin_client):
+    html = admin_client.get(SETUP).content.decode()
+    assert 'name="app_id"' in html
+    assert "Save and connect with Facebook" in html
+
+
+def test_saving_app_credentials_starts_facebook_login(admin_client):
+    response = admin_client.post(
+        SETUP, {"action": "save_app", "app_id": "4242", "app_secret": "the-secret"}
+    )
+    assert response["Location"] == reverse("facebook-login")
+    app = MetaApp.objects.get()
+    assert (app.app_id, app.app_secret) == ("4242", "the-secret")
+    # Saving again with a blank secret keeps the stored one.
+    admin_client.post(SETUP, {"action": "save_app", "app_id": "4242", "app_secret": ""})
+    app.refresh_from_db()
+    assert app.app_secret == "the-secret"
+
+
+def test_app_credentials_are_required(admin_client):
+    response = admin_client.post(SETUP, {"action": "save_app", "app_id": "", "app_secret": ""})
+    assert response.status_code == 200
+    assert not MetaApp.objects.exists()
 
 
 def test_setup_shows_callback_url_and_verify_token(admin_client):

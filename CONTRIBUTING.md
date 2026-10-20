@@ -52,6 +52,15 @@ uv run celery -A leadhook worker -l info  # in a second terminal
 uv run celery -A leadhook beat -l info    # in a third, for periodic jobs
 ```
 
+To develop on PostgreSQL instead of SQLite, start the database and Redis from Compose on
+localhost only and point `.env` at them:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+# .env: DATABASE_URL=postgres://leadhook:leadhook@localhost:5432/leadhook
+#       REDIS_URL=redis://localhost:6379/0
+```
+
 Or run the whole stack like production: `docker compose up --build`.
 
 To receive real webhooks locally, expose port 8000 with a tunnel (for example `cloudflared tunnel --url http://localhost:8000`), set `PUBLIC_BASE_URL` and `ALLOWED_HOSTS` to the tunnel host, and use a Meta app in development mode with the Lead Ads Testing Tool.

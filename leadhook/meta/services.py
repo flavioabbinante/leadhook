@@ -34,6 +34,18 @@ def record_page_error(page: Page, message: str) -> None:
         send_alert(AlertKind.PAGE_ERROR, f"Problem with page {page.page_id}", f"{page}: {message}")
 
 
+def form_questions(raw: dict) -> list[dict]:
+    """Key and label of each question of a Graph form object."""
+    questions = raw.get("questions")
+    if not isinstance(questions, list):
+        return []
+    return [
+        {"key": str(q["key"]), "label": str(q.get("label") or q["key"])}
+        for q in questions
+        if isinstance(q, dict) and q.get("key")
+    ]
+
+
 def sync_page_forms(page: Page, client: GraphClient | None = None) -> int:
     """Create or refresh every lead form of the page; returns how many Meta listed."""
     client = client or client_for_page(page)
@@ -50,6 +62,7 @@ def sync_page_forms(page: Page, client: GraphClient | None = None) -> int:
                 "name": fit_to_field(Form, "name", raw.get("name")),
                 "locale": fit_to_field(Form, "locale", raw.get("locale")),
                 "status": fit_to_field(Form, "status", raw.get("status")),
+                "questions": form_questions(raw),
                 "last_synced_at": now,
             },
         )

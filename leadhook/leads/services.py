@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from leadhook.meta.graph import GraphClient, GraphError, client_for_page
 from leadhook.meta.models import Form, Page
-from leadhook.meta.services import fit_to_field, record_page_error
+from leadhook.meta.services import fit_to_field, form_questions, record_page_error
 
 from .models import Lead
 from .parsing import parse_meta_time, simplify_field_data
@@ -62,6 +62,7 @@ def _get_or_create_form(page: Page, form_external_id: str, client: GraphClient) 
             "name": fit_to_field(Form, "name", raw.get("name")),
             "locale": fit_to_field(Form, "locale", raw.get("locale")),
             "status": fit_to_field(Form, "status", raw.get("status")),
+            "questions": form_questions(raw),
             "last_synced_at": timezone.now() if raw else None,
         },
     )

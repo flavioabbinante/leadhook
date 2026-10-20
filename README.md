@@ -81,19 +81,20 @@ Open `https://<your-domain>/admin/`, then **Set up LeadHook** (`/admin/setup/`, 
 LeadHook uses your own Meta app. One-time preparation in Meta:
 
 1. **Business Verification.** In Business Settings → Security Center, verify your business. Without it the app cannot go Live, and apps in development mode only receive test leads.
-2. **App.** In [Meta for Developers](https://developers.facebook.com/apps/) create an app of type **Business**, add the **Webhooks** product, and note the App ID and App secret (App settings → Basic).
-3. **Permissions.** The app needs `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement` and `pages_manage_ads`. For your own pages Standard Access is enough; no App Review is needed while the System User belongs to the same business.
-4. **System User.** In Business Settings → Users → System users, create an admin System User, assign it your pages (full control) and the app, then generate a token for the app with the permissions above. System User tokens never expire.
-5. **Leads Access.** In Business Settings → Integrations → Leads Access, allow the app (or the System User) for each page; otherwise Meta returns leads without answers.
-6. **Live mode.** Switch the app to Live.
+2. **App.** In [Meta for Developers](https://developers.facebook.com/apps/) create an app of type **Business**, add the **Facebook Login for Business** and **Webhooks** products, and note the App ID and App secret (App settings → Basic).
+3. **Login.** In Facebook Login for Business → Settings, add the **Valid OAuth Redirect URI** shown in LeadHook's setup (`PUBLIC_BASE_URL/admin/setup/facebook/callback/`). Optionally create a **configuration** with a *System-user access token* and the permissions `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads`; its ID goes in the Meta app's *Login configuration ID*, and the connection then never expires. Without one, LeadHook asks for those permissions and keeps a 60-day token (page tokens derived from it do not expire; the dashboard alerts before it runs out).
+4. **Leads Access.** In Business Settings → Integrations → Leads Access, allow the app for each page; otherwise Meta returns leads without answers.
+5. **Live mode.** Switch the app to Live.
 
 Then in LeadHook, open **Set up LeadHook** (`/admin/setup/`):
 
-1. Add the Meta app with the App ID, App secret and System User token.
-2. Copy the **Callback URL** and **Verify token** into the Meta app: Webhooks → **Page** → Subscribe to this object, then subscribe to the `leadgen` field. Press **Verify**.
-3. **Load pages**, select yours and **Connect**: LeadHook subscribes each page to lead events and imports its forms.
-4. Create a destination and set it as a page default (or on single forms).
+1. Add the Meta app with the App ID and App secret.
+2. Press **Connect with Facebook** and allow LeadHook. It stores the token and registers the webhook on the app, unless the app already sends its webhook to another URL: an app has one callback URL, so LeadHook never replaces it (this needs `PUBLIC_BASE_URL` reachable over HTTPS; the step also shows the Callback URL and Verify token to set it up by hand).
+3. Select your pages and **Connect**: LeadHook subscribes each page to lead events and imports its forms.
+4. Create a destination and connect it in **Routing** to a page (default for all its forms) or a single form.
 5. **Send test lead** and watch it arrive under Leads and Deliveries.
+
+A System User token pasted by hand in the Meta app still works instead of the login.
 
 ## 📦 Payload
 

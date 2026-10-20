@@ -32,25 +32,26 @@ NAVIGATION = [
     ),
     (
         "Configuration",
+        # In setup order: connect Meta, pick pages and forms, add a CRM, then route.
         [
-            ("routing", "Routing", "shuffle", "meta.view_form"),
+            ("admin:meta_metaapp_changelist", "Meta apps", "box", "meta.view_metaapp"),
+            ("admin:meta_page_changelist", "Pages", "flag", "meta.view_page"),
+            ("admin:meta_form_changelist", "Forms", "list", "meta.view_form"),
             (
                 "admin:destinations_destination_changelist",
                 "Destinations",
                 "target",
                 "destinations.view_destination",
             ),
-            ("admin:meta_page_changelist", "Pages", "flag", "meta.view_page"),
-            ("admin:meta_form_changelist", "Forms", "list", "meta.view_form"),
-            ("admin:meta_metaapp_changelist", "Meta apps", "box", "meta.view_metaapp"),
+            ("routing", "Routing", "shuffle", "meta.view_form"),
         ],
     ),
     (
         "Account",
         [
             ("admin:auth_user_changelist", "Users", "users", "auth.view_user"),
-            ("admin:auth_group_changelist", "Groups", "shield", "auth.view_group"),
             ("admin:core_invitation_changelist", "Invitations", "mail", "core.view_invitation"),
+            ("admin:auth_group_changelist", "Groups", "shield", "auth.view_group"),
         ],
     ),
 ]
