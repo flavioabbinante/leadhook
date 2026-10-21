@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Pagina iniziale</a> › Diagnostica</div>{% endblock %}
+{% block content %}
+<div id="content-main" class="lh-narrow">
+  <section class="lh-card">
+    <h2 class="lh-card-title">Azioni</h2>
+    <p class="lh-card-subtitle">Svuotare la cache cancella solo le chiavi di LeadHook (battito di beat, limiti sugli avvisi): i task in coda restano.</p>
+    <form method="post" class="lh-diag-actions">
+      {% csrf_token %}
+      <button class="lh-btn lh-btn-primary" type="submit" name="action" value="clear_cache"
+              onclick="return confirm('Svuotare la cache di LeadHook?')">Svuota la cache</button>
+      <button class="lh-btn lh-btn-outline" type="submit" name="action" value="sync_forms">Sincronizza i form da Meta</button>
+      <a class="lh-btn lh-btn-outline" href="{% url 'health' %}" target="_blank" rel="noopener">Apri /health/</a>
+    </form>
+  </section>
+  {% for title, icon, rows in sections %}
+    <section class="lh-card lh-card-flush">
+      <h2 class="lh-card-title lh-diag-title"><svg aria-hidden="true"><use href="#lh-{{ icon }}"></use></svg> {{ title }}</h2>
+      <table class="lh-table">
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <th scope="row">{{ row.label }}</th>
+              <td><span class="lh-diag-dot lh-diag-{{ row.state }}" aria-hidden="true"></span>{{ row.value }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}

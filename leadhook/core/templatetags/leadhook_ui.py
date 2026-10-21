@@ -3,7 +3,7 @@ from django.urls import reverse
 
 register = template.Library()
 
-# Sidebar sections: (heading, [(url name, label, icon, permission)]).
+# Sidebar sections: (heading, [(url name, label, icon, permission or "superuser")]).
 NAVIGATION = [
     (
         "",
@@ -16,6 +16,7 @@ NAVIGATION = [
         "Flusso",
         [
             ("admin:leads_lead_changelist", "Lead", "inbox", "leads.view_lead"),
+            ("stats", "Statistiche", "chart", "leads.view_lead"),
             (
                 "admin:destinations_delivery_changelist",
                 "Consegne",
@@ -52,6 +53,7 @@ NAVIGATION = [
             ("admin:auth_user_changelist", "Utenti", "users", "auth.view_user"),
             ("admin:core_invitation_changelist", "Inviti", "mail", "core.view_invitation"),
             ("admin:auth_group_changelist", "Gruppi", "shield", "auth.view_group"),
+            ("diagnostics", "Diagnostica", "search", "superuser"),
         ],
     ),
 ]
@@ -65,7 +67,10 @@ def leadhook_sidebar(context) -> dict:
     for heading, entries in NAVIGATION:
         items = []
         for name, label, icon, permission in entries:
-            if permission and not request.user.has_perm(permission):
+            if permission == "superuser":
+                if not request.user.is_superuser:
+                    continue
+            elif permission and not request.user.has_perm(permission):
                 continue
             url = reverse(name)
             # The dashboard URL prefixes every admin URL, so it is active only on an exact match.
