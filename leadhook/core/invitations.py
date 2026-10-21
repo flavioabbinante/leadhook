@@ -51,7 +51,7 @@ def accept_invitation(request: HttpRequest, token: str) -> HttpResponse:
             invitation.accepted_at = timezone.now()
             invitation.user = user
             invitation.save(update_fields=["accepted_at", "user"])
-        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
         return redirect("admin:index")
     context.update(form=form, invitation=invitation)
     return render(request, "admin/leadhook_invitation.html", context)
