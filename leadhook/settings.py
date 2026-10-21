@@ -87,6 +87,12 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+AUTHENTICATION_BACKENDS = ["leadhook.core.auth.NoDeleteModelBackend"]
+
+# The admin's "delete selected" confirmation posts one field per object; the default (1000)
+# makes deleting a few thousand leads or deliveries at once fail with TooManyFieldsSent.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 20_000
+
 LANGUAGE_CODE = "it"
 TIME_ZONE = "Europe/Rome"
 USE_I18N = True
