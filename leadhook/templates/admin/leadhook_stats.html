@@ -1,0 +1,89 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Pagina iniziale</a> › Statistiche</div>{% endblock %}
+{% block content %}
+<div id="content-main">
+
+  <form method="get" class="lh-stats-filters">
+    {# Sent first so a clicked period button (sent last) wins; the campaign menu keeps the period. #}
+    <input type="hidden" name="days" value="{{ days }}">
+    <div class="lh-segmented" role="group" aria-label="Periodo">
+      {% for period in periods %}
+        <button type="submit" name="days" value="{{ period }}" class="{% if period == days %}is-active{% endif %}"{% if period == days %} aria-pressed="true"{% endif %}>{{ period }} giorni</button>
+      {% endfor %}
+    </div>
+    <label class="lh-stats-select">
+      <span>Campagna</span>
+      <select name="campaign" onchange="this.form.requestSubmit()">
+        <option value="{{ all_campaigns }}"{% if campaign is None %} selected{% endif %}>Tutte</option>
+        {% for row in campaigns %}
+          <option value="{{ row.value }}"{% if campaign == row.value %} selected{% endif %}>{{ row.name }} ({{ row.count }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <a class="lh-btn lh-btn-outline" href="?days={{ days }}{% if campaign is not None %}&amp;campaign={{ campaign|urlencode }}{% endif %}&amp;format=csv">Esporta CSV</a>
+  </form>
+
+  <div class="lh-stats-tiles">
+    <div class="lh-card lh-stat"><span class="lh-stat-label">Lead negli ultimi {{ days }} giorni</span><span class="lh-stat-hero">{{ total }}</span></div>
+    <div class="lh-card lh-stat"><span class="lh-stat-label">Media al giorno</span><span class="lh-stat-value">{{ average }}</span></div>
+    <div class="lh-card lh-stat"><span class="lh-stat-label">Giorno migliore</span><span class="lh-stat-value">{% if best %}{{ best.count }} <small>il {{ best.day|date:"d/m" }}</small>{% else %}–{% endif %}</span></div>
+    <div class="lh-card lh-stat"><span class="lh-stat-label">Consegnati a tutte le destinazioni</span><span class="lh-stat-value">{{ delivered }} <small>su {{ total }}</small></span></div>
+  </div>
+
+  <section class="lh-card">
+    <h2 class="lh-card-title">Lead al giorno</h2>
+    <p class="lh-card-subtitle">{% if campaign is None %}Tutte le campagne{% else %}Campagna: {{ campaign|default:"senza nome" }} · <a href="?days={{ days }}">mostra tutte</a>{% endif %} · per giorno di invio del form</p>
+    {% if total %}
+      <div class="lh-chart" role="img" aria-label="Lead al giorno negli ultimi {{ days }} giorni, massimo {{ peak }}">
+        <div class="lh-chart-plot">
+          {% for tick in ticks %}
+            <div class="lh-chart-grid" style="bottom: {% widthratio tick peak 100 %}%"><span>{{ tick }}</span></div>
+          {% endfor %}
+          <div class="lh-chart-bars lh-days-{{ days }}">
+            {% for point in series %}
+              <div class="lh-chart-col" tabindex="0" aria-label="{{ point.day|date:'D d/m' }}: {{ point.count }} lead">
+                <span class="lh-chart-bar{% if not point.count %} is-zero{% endif %}" style="height: {{ point.height }}%"></span>
+                <span class="lh-chart-tip"><strong>{{ point.count }} lead</strong>{{ point.day|date:"D d/m" }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="lh-chart-axis lh-days-{{ days }}">
+          {% for point in series %}<span>{% if forloop.revcounter0|divisibleby:label_every %}{{ point.day|date:"d/m" }}{% endif %}</span>{% endfor %}
+        </div>
+      </div>
+      <details class="lh-details">
+        <summary>Mostra i dati come tabella</summary>
+        <table class="lh-table">
+          <thead><tr><th scope="col">Giorno</th><th scope="col" class="lh-num">Lead</th></tr></thead>
+          <tbody>{% for point in series reversed %}<tr><td>{{ point.day|date:"l d/m/Y" }}</td><td class="lh-num">{{ point.count }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </details>
+    {% else %}
+      <p class="lh-empty">Nessun lead in questo periodo.</p>
+    {% endif %}
+  </section>
+
+  <div class="lh-stats-grid">
+    {% for label, field, rows in breakdowns %}
+      <section class="lh-card lh-card-flush">
+        <div class="lh-card-head"><h2 class="lh-card-title">Per {{ label|lower }}</h2><p class="lh-card-subtitle">I primi 10 nel periodo</p></div>
+        <table class="lh-table">
+          <thead><tr><th scope="col">{{ label }}</th><th scope="col" class="lh-num">Lead</th><th scope="col" class="lh-col-bar">Quota</th></tr></thead>
+          <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="lh-row-strong">{% if field == "campaign_name" %}<a href="?days={{ days }}&amp;campaign={{ row.value|urlencode }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+              <td class="lh-num">{{ row.count }}</td>
+              <td class="lh-col-bar"><div class="lh-bar lh-bar-thin"><span class="lh-bar-fill lh-chart-fill" style="width: {{ row.share }}%"></span></div><span class="lh-sr">{{ row.share }}%</span></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="lh-empty">Nessun lead.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
