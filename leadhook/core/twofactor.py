@@ -9,6 +9,7 @@ import struct
 import time
 from urllib.parse import quote, urlencode
 
+import segno
 from django.contrib import admin
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
@@ -16,6 +17,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.safestring import mark_safe
 from django.views.decorators.cache import never_cache
 
 from .auth import give_back_attempt, take_attempt
@@ -105,4 +107,7 @@ def two_factor(request: HttpRequest) -> HttpResponse:
         # Spaced in groups of four for typing it into the app by hand.
         context["secret"] = " ".join(device.secret[i : i + 4] for i in range(0, 32, 4))
         context["uri"] = provisioning_uri(device.secret, request.user.get_username())
+        # Drawn here, never by an outside service: the QR code holds the secret.
+        qr = segno.make(context["uri"], error="m")
+        context["qr"] = mark_safe(qr.svg_inline(omitsize=True, dark="#000", light="#fff"))
     return render(request, "admin/leadhook_two_factor.html", context)
