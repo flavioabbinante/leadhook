@@ -138,3 +138,24 @@ def test_password_reset_for_unknown_address_looks_the_same(client):
 
 def test_login_page_links_password_reset(client):
     assert "/admin/password_reset/" in client.get(LOGIN).content.decode()
+
+
+def test_late_give_back_does_not_touch_the_next_window(monkeypatch):
+    from leadhook.core import auth
+
+    monkeypatch.setattr(auth.time, "time", lambda: 0)
+    reservation = auth.take_attempt("k")
+    monkeypatch.setattr(auth.time, "time", lambda: auth.WINDOW_SECONDS)
+    for _ in range(auth.MAX_ATTEMPTS):
+        assert auth.take_attempt("k") is not None
+    auth.give_back_attempt(reservation)  # the old request finishes in the new window
+    assert auth.take_attempt("k") is None
+
+
+def test_password_reset_smtp_error_reaches_the_task_retry(monkeypatch):
+    from leadhook.core import tasks
+
+    _user()
+    monkeypatch.setattr(tasks, "send_mail", lambda *a, **k: (_ for _ in ()).throw(OSError()))
+    with pytest.raises(OSError):
+        tasks.send_password_reset.run("maria@example.com")

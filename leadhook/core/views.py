@@ -37,7 +37,7 @@ class ThrottledPasswordResetView(PasswordResetView):
 
     def form_valid(self, form):
         email = form.cleaned_data["email"]
-        if take_attempt(f"reset:{email.lower()}"):
+        if take_attempt(f"reset:{email.lower()}") is not None:
             send_password_reset.delay(email)
         # Same "email sent" page in every case, so nothing is revealed about the address.
         return redirect(self.get_success_url())
