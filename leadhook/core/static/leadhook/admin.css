@@ -675,6 +675,8 @@ body.login { background: var(--lh-canvas); }
   text-align: center;
   user-select: all;
 }
+.login .lh-qr { margin: 10px 0; text-align: center; }
+.login .lh-qr svg { display: inline-block; width: 200px; height: 200px; border-radius: var(--lh-radius-sm); }
 .login .form-row input.lh-otp { font-size: 20px; letter-spacing: 0.4em; text-align: center; }
 .login .lh-auth-footer { margin: 16px 0 0; text-align: center; }
 .login .lh-link-button {

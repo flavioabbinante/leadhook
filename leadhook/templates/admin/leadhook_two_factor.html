@@ -4,9 +4,11 @@
 {% if secret %}
   <p>Per proteggere l'account serve un'app di autenticazione (Google Authenticator, Microsoft Authenticator, 1Password…).</p>
   <ol class="lh-card-steps">
-    <li>Nell'app aggiungi un account e inserisci questa chiave:
+    <li>Nell'app aggiungi un account e inquadra questo QR code:
+      <div class="lh-qr">{{ qr }}</div>
+      Non riesci a inquadrarlo? Inserisci a mano la chiave
       <code class="lh-secret">{{ secret }}</code>
-      Dal telefono puoi anche <a href="{{ uri }}">aprire direttamente l'app</a>.
+      oppure, se sei già sul telefono, <a href="{{ uri }}">apri direttamente l'app</a>.
     </li>
     <li>Scrivi qui sotto il codice a 6 cifre che l'app mostra.</li>
   </ol>

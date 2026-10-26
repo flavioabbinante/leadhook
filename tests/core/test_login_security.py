@@ -89,6 +89,7 @@ def test_password_login_requires_totp_enrollment_then_code(client):
     page = client.get(TWO_FACTOR).content.decode()
     device = TwoFactorDevice.objects.get(user=user)
     assert device.secret[:4] in page and device.confirmed_at is None
+    assert "<svg" in page and 'class="lh-qr"' in page
 
     assert "Codice non valido" in client.post(TWO_FACTOR, {"code": "000000"}).content.decode()
     code = code_at(device.secret, int(time.time() // 30))
