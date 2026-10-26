@@ -1,6 +1,3 @@
-from urllib.parse import urlsplit
-
-from django.conf import settings
 from django.contrib.auth.views import PasswordResetView
 from django.db import connection
 from django.http import HttpRequest, JsonResponse
@@ -8,8 +5,9 @@ from django.shortcuts import redirect
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
-from .auth import is_locked, record_failure
+from .auth import take_attempt
 from .health import HEARTBEAT_MAX_AGE, heartbeat_age
+from .tasks import send_password_reset
 
 
 @never_cache
@@ -34,17 +32,12 @@ def health(request: HttpRequest) -> JsonResponse:
 
 
 class ThrottledPasswordResetView(PasswordResetView):
-    """Reset links point at PUBLIC_BASE_URL, and one address gets a few emails at most."""
-
-    @property
-    def extra_email_context(self):
-        url = urlsplit(settings.PUBLIC_BASE_URL)
-        return {"protocol": url.scheme, "domain": url.netloc, "site_name": "LeadHook"}
+    """Mails are sent by a task, so the response takes the same time whether the address
+    has an account or not; one address gets a few emails at most."""
 
     def form_valid(self, form):
-        key = f"reset:{form.cleaned_data['email'].lower()}"
-        if is_locked(key):
-            # Same "email sent" page, so the throttle reveals nothing about the address.
-            return redirect(self.get_success_url())
-        record_failure(key)
-        return super().form_valid(form)
+        email = form.cleaned_data["email"]
+        if take_attempt(f"reset:{email.lower()}"):
+            send_password_reset.delay(email)
+        # Same "email sent" page in every case, so nothing is revealed about the address.
+        return redirect(self.get_success_url())

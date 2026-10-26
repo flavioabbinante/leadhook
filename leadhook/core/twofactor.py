@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import hmac
+import re
 import secrets
 import struct
 import time
@@ -17,10 +18,10 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 
-from .auth import clear_failures, is_locked, record_failure
+from .auth import give_back_attempt, take_attempt
 from .models import TwoFactorDevice
 
-SESSION_KEY = "lh_2fa_user"
+SESSION_KEY = "lh_2fa_device"
 STEP = 30
 
 
@@ -37,6 +38,8 @@ def code_at(secret: str, counter: int) -> str:
 
 def matching_counter(secret: str, code: str, now: float | None = None) -> int | None:
     """Time step of the code, allowing one step of clock drift either way."""
+    if not re.fullmatch(r"[0-9]{6}", code):
+        return None
     current = int((time.time() if now is None else now) // STEP)
     for counter in (current - 1, current, current + 1):
         if hmac.compare_digest(code_at(secret, counter), code):
@@ -50,7 +53,15 @@ def provisioning_uri(secret: str, account: str) -> str:
 
 
 def is_verified(request: HttpRequest) -> bool:
-    return request.session.get(SESSION_KEY) == request.user.pk
+    """The session confirmed a code of the user's current device: deleting the device
+    (or enrolling a new one) logs every session out of the second factor."""
+    device_id = request.session.get(SESSION_KEY)
+    return (
+        device_id is not None
+        and TwoFactorDevice.objects.filter(
+            pk=device_id, user=request.user, confirmed_at__isnull=False
+        ).exists()
+    )
 
 
 @never_cache
@@ -64,7 +75,7 @@ def two_factor(request: HttpRequest) -> HttpResponse:
     error = None
     if request.method == "POST":
         key = f"2fa:{request.user.pk}"
-        if is_locked(key):
+        if not take_attempt(key):
             error = "Troppi tentativi sbagliati. Riprova tra 15 minuti."
         else:
             with transaction.atomic():
@@ -77,11 +88,10 @@ def two_factor(request: HttpRequest) -> HttpResponse:
                     device.confirmed_at = device.confirmed_at or timezone.now()
                     device.save(update_fields=["last_counter", "confirmed_at"])
             if accepted:
-                clear_failures(key)
+                give_back_attempt(key)
                 request.session.cycle_key()
-                request.session[SESSION_KEY] = request.user.pk
+                request.session[SESSION_KEY] = device.pk
                 return redirect(next_url)
-            record_failure(key)
             error = "Codice non valido."
     context = {
         **admin.site.each_context(request),
