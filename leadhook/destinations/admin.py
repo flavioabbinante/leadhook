@@ -3,7 +3,7 @@ from functools import partial
 
 from django import forms
 from django.contrib import admin
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
@@ -176,6 +176,10 @@ class DestinationAdmin(admin.ModelAdmin):
         if not getattr(obj, "_can_preview_leads", False):
             return "Serve il permesso di vedere i lead per l'anteprima."
         leads = Lead.objects.exclude(status=Lead.Status.RECEIVED).filter(purged_at__isnull=True)
+        # Leads this destination really received come first (their answers match its forms),
+        # but any other lead can still be picked, e.g. to try a destination before its first send.
+        sent_here = Exists(Delivery.objects.filter(lead=OuterRef("pk"), destination=obj))
+        leads = leads.annotate(sent_here=sent_here).order_by("-sent_here", "-received_at")
         lead_id = getattr(obj, "_preview_lead_id", None)
         lead = leads.filter(leadgen_id=lead_id).first() if lead_id else leads.first()
         if lead is None:
@@ -217,6 +221,10 @@ class DeliveryAdmin(admin.ModelAdmin):
     readonly_fields = [f.name for f in Delivery._meta.fields]
 
     def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # Every field is read-only: show the page in view mode, without useless Save buttons.
         return False
 
     @admin.action(description="Reinvia le consegne selezionate")
