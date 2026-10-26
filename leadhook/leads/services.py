@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from enum import StrEnum
 
+from django.db import transaction
 from django.utils import timezone
 
 from leadhook.meta.graph import GraphClient, GraphError, client_for_page
@@ -92,25 +93,41 @@ def fetch_lead_details(lead: Lead) -> FetchOutcome:
             return FetchOutcome.GIVE_UP
         return FetchOutcome.RETRY if exc.is_transient else FetchOutcome.GIVE_UP
 
-    store_lead_details(lead, page, raw, client)
+    if not store_lead_details(lead, page, raw, client):
+        return FetchOutcome.GIVE_UP
     return FetchOutcome.DONE
 
 
-def store_lead_details(lead: Lead, page: Page, raw: dict, client: GraphClient) -> None:
-    """Save a Graph API lead object on `lead` and mark it fetched."""
-    lead.page = page
-    lead.created_time = parse_meta_time(raw.get("created_time"))
-    for name in ("ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"):
-        setattr(lead, name, fit_to_field(Lead, name, raw.get(name)))
-    lead.is_organic = bool(raw.get("is_organic", False))
-    lead.field_data = raw.get("field_data") or []
-    lead.data = simplify_field_data(lead.field_data)
-    lead.form_external_id = raw.get("form_id") or lead.form_external_id
-    lead.form = _get_or_create_form(page, lead.form_external_id, client)
-    lead.status = Lead.Status.FETCHED
-    lead.error = ""
-    lead.save()
+def store_lead_details(lead: Lead, page: Page, raw: dict, client: GraphClient) -> bool:
+    """Save a Graph API lead object on `lead` and mark it fetched.
+
+    Returns False and writes nothing when the lead is no longer RECEIVED or its data was
+    purged by retention: the row lock serialises this write with purge_expired_data.
+    """
+    form_external_id = raw.get("form_id") or lead.form_external_id
+    # Before the lock: it may call the Graph API.
+    form = _get_or_create_form(page, form_external_id, client)
+    with transaction.atomic():
+        if (
+            not Lead.objects.select_for_update()
+            .filter(pk=lead.pk, status=Lead.Status.RECEIVED, purged_at__isnull=True)
+            .exists()
+        ):
+            return False
+        lead.page = page
+        lead.created_time = parse_meta_time(raw.get("created_time"))
+        for name in ("ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name"):
+            setattr(lead, name, fit_to_field(Lead, name, raw.get(name)))
+        lead.is_organic = bool(raw.get("is_organic", False))
+        lead.field_data = raw.get("field_data") or []
+        lead.data = simplify_field_data(lead.field_data)
+        lead.form_external_id = form_external_id
+        lead.form = form
+        lead.status = Lead.Status.FETCHED
+        lead.error = ""
+        lead.save()
     Page.objects.filter(pk=page.pk).update(last_lead_at=timezone.now(), error="")
+    return True
 
 
 def reconcile_form(form: Form, client: GraphClient, *, now: datetime) -> list[Lead]:
@@ -130,10 +147,8 @@ def reconcile_form(form: Form, client: GraphClient, *, now: datetime) -> list[Le
         if lead is None:
             # Known lead: finish it only if its own fetch never succeeded.
             lead = Lead.objects.filter(leadgen_id=leadgen_id, status=Lead.Status.RECEIVED).first()
-        if lead is None:
-            continue
-        store_lead_details(lead, form.page, raw, client)
-        found.append(lead)
+        if lead is not None and store_lead_details(lead, form.page, raw, client):
+            found.append(lead)
     form.last_reconciled_at = now
     form.save(update_fields=["last_reconciled_at"])
     return found

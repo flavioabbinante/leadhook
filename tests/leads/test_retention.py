@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 import responses
@@ -5,11 +6,16 @@ from django.utils import timezone
 
 from leadhook.destinations.models import Delivery
 from leadhook.destinations.services import reset_for_resend
+from leadhook.destinations.sweep import stuck_received_leads
 from leadhook.destinations.tasks import deliver
 from leadhook.leads.models import Lead, WebhookEvent
 from leadhook.leads.retention import purge_expired_data
-from tests.factories import make_destination, make_lead
-from tests.fixtures import leadgen_payload
+from leadhook.leads.services import FetchOutcome, fetch_lead_details
+from leadhook.leads.tasks import fetch_lead, reconcile_leads
+from tests.factories import make_destination, make_form, make_lead
+from tests.fixtures import GRAPH_LEAD, leadgen_payload
+
+BASE = "https://graph.facebook.com/v21.0"
 
 
 def _make_old(model, pk, days=91):
@@ -83,3 +89,56 @@ def test_deliver_fails_pending_delivery_of_purged_lead():
     assert delivery.status == Delivery.Status.FAILED
     assert "eliminati" in delivery.last_error
     assert len(responses.calls) == 0
+
+
+def _purged_received_lead() -> Lead:
+    lead = Lead.objects.create(leadgen_id="333", page_external_id="111", form_external_id="222")
+    _make_old(Lead, lead.pk)
+    purge_expired_data(now=timezone.now())
+    return lead
+
+
+@responses.activate
+def test_fetch_never_refills_a_purged_lead():
+    make_form()
+    lead = _purged_received_lead()
+    fetch_lead(lead.pk)
+    assert not responses.calls
+    lead.refresh_from_db()
+    assert (lead.data, lead.field_data, lead.status) == ({}, [], Lead.Status.RECEIVED)
+
+
+@responses.activate
+def test_fetch_in_flight_during_purge_stores_nothing():
+    make_form()
+    lead = Lead.objects.create(leadgen_id="333", page_external_id="111", form_external_id="222")
+    _make_old(Lead, lead.pk)
+    stale = Lead.objects.get(pk=lead.pk)  # loaded by fetch_lead before the purge ran
+
+    def purge_then_answer(request):
+        purge_expired_data(now=timezone.now())
+        return 200, {}, json.dumps(GRAPH_LEAD)
+
+    responses.add_callback(responses.GET, f"{BASE}/333", callback=purge_then_answer)
+    assert fetch_lead_details(stale) == FetchOutcome.GIVE_UP
+    lead.refresh_from_db()
+    assert (lead.data, lead.field_data, lead.status) == ({}, [], Lead.Status.RECEIVED)
+    assert lead.purged_at is not None
+
+
+@responses.activate
+def test_reconcile_never_refills_a_purged_lead():
+    make_form().page.default_destinations.add(make_destination())
+    lead = _purged_received_lead()
+    responses.get(f"{BASE}/222/leads", json={"data": [GRAPH_LEAD]})
+    reconcile_leads()
+    lead.refresh_from_db()
+    assert (lead.data, lead.field_data, lead.status) == ({}, [], Lead.Status.RECEIVED)
+    assert not lead.deliveries.exists()
+
+
+def test_sweep_skips_purged_received_leads():
+    lead = _purged_received_lead()
+    Lead.objects.filter(pk=lead.pk).update(received_at=timezone.now() - timedelta(days=1))
+    later = timezone.now() + timedelta(hours=2)
+    assert not stuck_received_leads(later).filter(pk=lead.pk).exists()
