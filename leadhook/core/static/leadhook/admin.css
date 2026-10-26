@@ -659,6 +659,36 @@ body.login { background: var(--lh-canvas); }
 .login .submit-row input { width: 100%; background: var(--lh-orange); }
 .login .form-row { padding: 6px 0; border: 0; }
 .login .form-row input { width: 100%; box-sizing: border-box; border-radius: var(--lh-radius-sm); padding: 10px 12px; }
+.login .lh-card-title { margin: 0 0 12px; font-size: 18px; text-align: center; color: var(--lh-ink); }
+.login #content-main p { margin: 0 0 12px; line-height: 1.5; }
+.login .lh-card-steps { margin: 0 0 12px; padding-left: 20px; line-height: 1.5; }
+.login .lh-card-steps li { margin-bottom: 10px; list-style: decimal; }
+.login .lh-secret {
+  display: block;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: var(--lh-radius-sm);
+  background: var(--darkened-bg);
+  border: 1px solid var(--lh-line);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: all;
+}
+.login .lh-qr { margin: 10px 0; text-align: center; }
+.login .lh-qr svg { display: inline-block; width: 200px; height: 200px; border-radius: var(--lh-radius-sm); }
+.login .form-row input.lh-otp { font-size: 20px; letter-spacing: 0.4em; text-align: center; }
+.login .lh-auth-footer { margin: 16px 0 0; text-align: center; }
+.login .lh-link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--link-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.login .lh-link-button:hover { text-decoration: underline; }
+.login .submit-row a.lh-btn { text-align: center; }
 
 /* ---------- Responsive ---------- */
 
