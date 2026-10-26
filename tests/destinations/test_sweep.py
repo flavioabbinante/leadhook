@@ -1,11 +1,12 @@
 from datetime import timedelta
 from unittest import mock
 
+import pytest
 import responses
 from django.utils import timezone
 
 from leadhook.destinations.models import Delivery
-from leadhook.destinations.tasks import sweep_stuck_work
+from leadhook.destinations.tasks import deliver, sweep_stuck_work
 from leadhook.leads.models import Lead, WebhookEvent
 from tests.factories import make_destination, make_form, make_lead
 from tests.fixtures import GRAPH_LEAD, leadgen_payload
@@ -85,3 +86,40 @@ def test_sweep_refetches_received_leads_hourly_for_a_week():
     with mock.patch("leadhook.destinations.tasks.fetch_lead.delay") as dispatch:
         sweep_stuck_work()
     assert [call.args[0] for call in dispatch.call_args_list] == [due.pk]
+
+
+@responses.activate
+def test_sweep_settles_lead_when_worker_died_before_refresh():
+    responses.post(HOOK, json={})
+    lead = make_lead(status=Lead.Status.ROUTED)
+    delivery = Delivery.objects.create(lead=lead, destination=make_destination())
+    with (
+        mock.patch(
+            "leadhook.destinations.tasks.refresh_lead_status", side_effect=SystemExit("killed")
+        ),
+        pytest.raises(SystemExit),
+    ):
+        deliver(delivery.pk)
+    delivery.refresh_from_db()
+    lead.refresh_from_db()
+    assert (delivery.status, lead.status) == (Delivery.Status.SUCCESS, Lead.Status.ROUTED)
+    sweep_stuck_work()
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.ROUTED  # not stuck yet
+    _age(Lead, lead.pk, updated_at=timezone.now() - timedelta(minutes=10))
+    sweep_stuck_work()
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.DELIVERED
+
+
+def test_sweep_leaves_routed_lead_with_pending_delivery():
+    lead = make_lead(status=Lead.Status.ROUTED)
+    Delivery.objects.create(
+        lead=lead,
+        destination=make_destination(),
+        next_retry_at=timezone.now() + timedelta(hours=1),
+    )
+    _age(Lead, lead.pk, updated_at=timezone.now() - timedelta(minutes=10))
+    sweep_stuck_work()
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.ROUTED

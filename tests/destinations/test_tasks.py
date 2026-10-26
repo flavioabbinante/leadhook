@@ -263,3 +263,11 @@ def test_failing_template_filter_fails_delivery_without_retry():
     delivery.refresh_from_db()
     assert delivery.status == Delivery.Status.FAILED
     assert delivery.last_error.startswith("Errore nel template")
+
+
+def test_deliver_redelivery_settles_lead_left_routed():
+    delivery = _pending_delivery()
+    Delivery.objects.filter(pk=delivery.pk).update(status=Delivery.Status.SUCCESS)
+    deliver(delivery.pk)
+    delivery.lead.refresh_from_db()
+    assert delivery.lead.status == Lead.Status.DELIVERED

@@ -16,6 +16,8 @@ LEAD_PLACEHOLDERS = {
 }
 PLACEHOLDER = re.compile(r"\{\{?\s*([^{}\n]+?)\s*\}?\}")
 TOKEN = re.compile(r"\x00(\d+)\x00")
+# A tag, an entity or one character of text in render_markdown's output.
+HTML_PIECE = re.compile(r"<(/?)(\w+)[^>]*>|&[^;]*;|[^<&]")
 INLINE = [
     (re.compile(r"`([^`\n]+)`"), r"<code>\1</code>"),
     (re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)"), r'<a href="\2">\1</a>'),
@@ -57,5 +59,23 @@ def render_markdown(template: str, context: dict) -> str:
             line = pattern.sub(replacement, line)
         lines.append(line)
     text = TOKEN.sub(lambda m: values[int(m.group(1))], "\n".join(lines))
-    # shortcut: cutting at the limit can split a tag; Telegram then rejects the message.
-    return text[:TEXT_LIMIT]
+    return truncate_html(text, TEXT_LIMIT)
+
+
+def truncate_html(text: str, limit: int) -> str:
+    """Cut Telegram HTML to `limit` characters without splitting a tag or entity, closing
+    the tags left open."""
+    if len(text) <= limit:
+        return text
+    kept: list[str] = []
+    open_tags: list[str] = []
+    size = 0
+    for match in HTML_PIECE.finditer(text):
+        piece, closing, tag = match.group(0), match.group(1), match.group(2)
+        after = open_tags[:-1] if closing else [*open_tags, tag] if tag else open_tags
+        if size + len(piece) + sum(len(t) + 3 for t in after) > limit:
+            break
+        kept.append(piece)
+        size += len(piece)
+        open_tags = after
+    return "".join(kept) + "".join(f"</{t}>" for t in reversed(open_tags))
