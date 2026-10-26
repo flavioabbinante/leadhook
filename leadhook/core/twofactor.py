@@ -95,6 +95,8 @@ def two_factor(request: HttpRequest) -> HttpResponse:
             error = "Codice non valido."
     context = {
         **admin.site.each_context(request),
+        # No admin sidebar before the second factor: it would link to pages not yet open.
+        "has_permission": False,
         "title": "Verifica in due passaggi",
         "device": device,
         "error": error,

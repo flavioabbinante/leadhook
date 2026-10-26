@@ -1,18 +1,15 @@
-{% extends "admin/base_site.html" %}
-{% load static %}
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/login.css" %}">{% endblock %}
-{% block bodyclass %}{{ block.super }} login{% endblock %}
-{% block usertools %}{% endblock %}
-{% block nav-global %}{% endblock %}
-{% block content_title %}{% endblock %}
-{% block nav-breadcrumbs %}{% endblock %}
+{% extends "admin/leadhook_card.html" %}
 {% block content %}
 <div id="content-main">
 {% if secret %}
   <p>Per proteggere l'account serve un'app di autenticazione (Google Authenticator, Microsoft Authenticator, 1Password…).</p>
-  <p>Aggiungi un account nell'app con questa chiave, poi inserisci il codice a 6 cifre che mostra:</p>
-  <p><code>{{ secret }}</code></p>
-  <p>Dal telefono puoi anche <a href="{{ uri }}">aprire direttamente l'app</a>.</p>
+  <ol class="lh-card-steps">
+    <li>Nell'app aggiungi un account e inserisci questa chiave:
+      <code class="lh-secret">{{ secret }}</code>
+      Dal telefono puoi anche <a href="{{ uri }}">aprire direttamente l'app</a>.
+    </li>
+    <li>Scrivi qui sotto il codice a 6 cifre che l'app mostra.</li>
+  </ol>
 {% else %}
   <p>Inserisci il codice a 6 cifre mostrato dalla tua app di autenticazione.</p>
 {% endif %}
@@ -20,12 +17,12 @@
   <form method="post">{% csrf_token %}
     <div class="form-row">
       <label for="id_code">Codice:</label>
-      <input type="text" name="code" id="id_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus>
+      <input type="text" name="code" id="id_code" class="lh-otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus>
     </div>
     <div class="submit-row"><input type="submit" value="Verifica"></div>
   </form>
-  <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}
-    <div class="submit-row"><input type="submit" value="Esci"></div>
+  <form method="post" action="{% url 'admin:logout' %}" class="lh-auth-footer">{% csrf_token %}
+    <button type="submit" class="lh-link-button">Esci e accedi con un altro account</button>
   </form>
 </div>
 {% endblock %}

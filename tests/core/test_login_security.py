@@ -118,6 +118,8 @@ def test_password_reset_emails_a_working_link_and_is_throttled(client):
         response = client.post("/admin/password_reset/", {"email": "maria@example.com"})
         assert response.status_code == 302
     assert len(mail.outbox) == 5
+    assert mail.outbox[0].subject == "Reimposta la password di LeadHook"
+    assert "Ciao maria" in mail.outbox[0].body
     link = re.search(r"https://leadhook\.test(/admin/reset/\S+/)", mail.outbox[0].body).group(1)
     form = client.get(link, follow=True)
     assert form.status_code == 200
@@ -136,8 +138,15 @@ def test_password_reset_for_unknown_address_looks_the_same(client):
     assert mail.outbox == []
 
 
-def test_login_page_links_password_reset(client):
-    assert "/admin/password_reset/" in client.get(LOGIN).content.decode()
+def test_login_page_links_password_reset_in_italian(client):
+    page = client.get(LOGIN).content.decode()
+    assert "/admin/password_reset/" in page and "Password dimenticata?" in page
+
+
+def test_two_factor_page_has_no_admin_sidebar(client):
+    _user()
+    _login(client)
+    assert "lh-sidebar" not in client.get(TWO_FACTOR).content.decode()
 
 
 def test_late_give_back_does_not_touch_the_next_window(monkeypatch):
