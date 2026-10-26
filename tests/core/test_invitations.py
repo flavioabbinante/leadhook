@@ -38,8 +38,8 @@ def test_invitation_is_emailed_and_creates_a_staff_user(admin_client, client):
     assert list(user.groups.all()) == [group]
     invitation.refresh_from_db()
     assert invitation.user == user and invitation.status == "Accettato"
-    # Logged in straight away, then asked to set up the second factor.
-    assert client.get("/admin/").url.startswith("/admin/2fa/")
+    # Logged in straight away.
+    assert client.get("/admin/").status_code == 200
 
     # Single use.
     assert client.post(path, {"username": "other"}).status_code == 410

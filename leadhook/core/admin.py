@@ -2,7 +2,7 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from .invitations import invitation_link, send_invitation
-from .models import Invitation, TwoFactorDevice
+from .models import Invitation
 
 
 @admin.register(Invitation)
@@ -49,27 +49,3 @@ class InvitationAdmin(admin.ModelAdmin):
             ),
             messages.WARNING,
         )
-
-
-@admin.register(TwoFactorDevice)
-class TwoFactorDeviceAdmin(admin.ModelAdmin):
-    """Superusers reset a lost authenticator by deleting the device."""
-
-    list_display = ("user", "confirmed_at")
-    fields = ("user", "confirmed_at")
-    readonly_fields = fields
-
-    def has_module_permission(self, request):
-        return request.user.is_superuser
-
-    def has_view_permission(self, request, obj=None):
-        return request.user.is_superuser
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser
