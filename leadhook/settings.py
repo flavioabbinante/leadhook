@@ -89,6 +89,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTHENTICATION_BACKENDS = ["leadhook.core.auth.NoDeleteModelBackend"]
+# Only the admin has a login page (the password reset pages link to it).
+LOGIN_URL = "admin:login"
 
 # The admin's "delete selected" confirmation posts one field per object; the default (1000)
 # makes deleting a few thousand leads or deliveries at once fail with TooManyFieldsSent.

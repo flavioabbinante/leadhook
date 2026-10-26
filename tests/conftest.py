@@ -34,15 +34,20 @@ def _clear_cache():
 def _two_factor_passed_on_force_login(monkeypatch):
     """force_login (and admin_client) stand for a finished login, second factor included."""
     from django.test import Client
+    from django.utils import timezone
 
-    from leadhook.core.twofactor import SESSION_KEY
+    from leadhook.core.models import TwoFactorDevice
+    from leadhook.core.twofactor import SESSION_KEY, new_secret
 
     original = Client.force_login
 
     def force_login(self, user, backend=None):
         original(self, user, backend)
+        device, _ = TwoFactorDevice.objects.get_or_create(
+            user=user, defaults={"secret": new_secret(), "confirmed_at": timezone.now()}
+        )
         session = self.session
-        session[SESSION_KEY] = user.pk
+        session[SESSION_KEY] = device.pk
         session.save()
 
     monkeypatch.setattr(Client, "force_login", force_login)
