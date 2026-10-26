@@ -1,12 +1,11 @@
-/* LeadHook admin theme: soft cards, orange accent, sidebar shell. Loaded after Django's CSS. */
+/* LeadHook admin theme: soft cards, indigo accent, sidebar shell. Loaded after Django's CSS. */
 
 :root,
 html[data-theme="light"] {
-  --lh-orange: #f2692a;
-  --lh-orange-dark: #d9561a;
-  --lh-orange-soft: #fde9df;
+  --lh-accent: #4f46e5;
+  --lh-accent-dark: #4338ca;
+  --lh-accent-soft: #eef2ff;
   --lh-ink: #1f2023;
-  --lh-indigo: #4f46e5;
   --lh-ink-soft: #2b2c30;
   --lh-text: #343a40;
   --lh-muted: #7b8191;
@@ -24,9 +23,9 @@ html[data-theme="light"] {
   --lh-radius-sm: 10px;
 
   /* Django admin variables, re-pointed at the theme. */
-  --primary: var(--lh-orange);
+  --primary: var(--lh-accent);
   --secondary: var(--lh-ink);
-  --accent: var(--lh-orange);
+  --accent: var(--lh-accent);
   --primary-fg: #fff;
   --body-fg: var(--lh-text);
   --body-bg: var(--lh-canvas);
@@ -40,9 +39,9 @@ html[data-theme="light"] {
   --breadcrumbs-fg: var(--lh-muted);
   --breadcrumbs-link-fg: var(--lh-muted);
   --breadcrumbs-bg: transparent;
-  --link-fg: var(--lh-orange-dark);
+  --link-fg: var(--lh-accent-dark);
   --link-hover-color: var(--lh-ink);
-  --link-selected-fg: var(--lh-orange);
+  --link-selected-fg: var(--lh-accent);
   --hairline-color: var(--lh-line);
   --border-color: #dfe1e6;
   --darkened-bg: #f8f8fa;
@@ -51,12 +50,12 @@ html[data-theme="light"] {
   --button-fg: #fff;
   --button-bg: var(--lh-ink);
   --button-hover-bg: #000;
-  --default-button-bg: var(--lh-orange);
-  --default-button-hover-bg: var(--lh-orange-dark);
+  --default-button-bg: var(--lh-accent);
+  --default-button-hover-bg: var(--lh-accent-dark);
   --close-button-bg: #8b909c;
   --close-button-hover-bg: var(--lh-ink);
   --object-tools-bg: var(--lh-ink);
-  --object-tools-hover-bg: var(--lh-orange);
+  --object-tools-hover-bg: var(--lh-accent);
   --message-success-bg: #e8f7ec;
   --message-warning-bg: #fff6e0;
   --message-error-bg: #fdecec;
@@ -73,15 +72,17 @@ html[data-theme="light"] {
     --lh-surface: #1c1d21;
     --lh-canvas: #131417;
     --lh-track: #2c2e34;
-    --lh-orange-soft: #3a2316;
+    --lh-accent: #6366f1;
+    --lh-accent-dark: #818cf8;
+    --lh-accent-soft: #23214a;
     --lh-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     --lh-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
     --body-bg: var(--lh-canvas);
     --button-bg: #33353b;
     --button-hover-bg: #45474e;
     --darkened-bg: #202126;
-    --selected-bg: #3a2316;
-    --selected-row: #3a2316;
+    --selected-bg: #23214a;
+    --selected-row: #23214a;
     --border-color: #3a3c43;
     --message-success-bg: #18301f;
     --message-warning-bg: #3a2f12;
@@ -98,15 +99,17 @@ html[data-theme="dark"] {
   --lh-surface: #1c1d21;
   --lh-canvas: #131417;
   --lh-track: #2c2e34;
-  --lh-orange-soft: #3a2316;
+  --lh-accent: #6366f1;
+  --lh-accent-dark: #818cf8;
+  --lh-accent-soft: #23214a;
   --lh-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --lh-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
   --body-bg: var(--lh-canvas);
   --button-bg: #33353b;
   --button-hover-bg: #45474e;
   --darkened-bg: #202126;
-  --selected-bg: #3a2316;
-  --selected-row: #3a2316;
+  --selected-bg: #23214a;
+  --selected-row: #23214a;
   --border-color: #3a3c43;
   --message-success-bg: #18301f;
   --message-warning-bg: #3a2f12;
@@ -119,7 +122,7 @@ html, body { background: var(--lh-canvas); }
 body { color: var(--lh-text); font-size: 14px; -webkit-font-smoothing: antialiased; }
 a:link, a:visited { color: var(--link-fg); }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--lh-orange);
+  outline: 2px solid var(--lh-accent);
   outline-offset: 2px;
 }
 .base-svgs { display: none; }
@@ -171,7 +174,7 @@ svg { width: 18px; height: 18px; }
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: var(--lh-indigo);
+  background: var(--lh-accent);
   color: #fff;
 }
 .lh-sidebar-nav { flex: 1; }
@@ -218,7 +221,7 @@ svg { width: 18px; height: 18px; }
   color: var(--lh-ink);
 }
 .lh-icon-chip svg { width: 16px; height: 16px; }
-.lh-nav-link.is-active .lh-icon-chip, .lh-chip-orange { background: var(--lh-orange); color: #fff; }
+.lh-nav-link.is-active .lh-icon-chip, .lh-chip-orange { background: var(--lh-accent); color: #fff; }
 
 .lh-help-card {
   display: flex;
@@ -228,10 +231,10 @@ svg { width: 18px; height: 18px; }
   border-radius: var(--lh-radius);
   color: #fff;
   background:
-    radial-gradient(120% 90% at 100% 0%, rgba(242, 105, 42, 0.45), transparent 60%),
+    radial-gradient(120% 90% at 100% 0%, rgba(79, 70, 229, 0.45), transparent 60%),
     linear-gradient(160deg, #2c2d33, #17181b);
 }
-.lh-help-card .lh-icon-chip { background: #fff; color: var(--lh-orange); margin-bottom: 10px; }
+.lh-help-card .lh-icon-chip { background: #fff; color: var(--lh-accent); margin-bottom: 10px; }
 .lh-help-card strong { font-size: 15px; }
 .lh-help-card span:not(.lh-icon-chip) { color: rgba(255, 255, 255, 0.75); font-size: 12px; margin-bottom: 10px; }
 
@@ -303,10 +306,10 @@ svg { width: 18px; height: 18px; }
   cursor: pointer;
   text-transform: none;
 }
-.lh-topbar-link:hover { color: var(--lh-orange) !important; }
+.lh-topbar-link:hover { color: var(--lh-accent) !important; }
 #user-tools a.lh-btn { text-transform: none; letter-spacing: 0; border-bottom: 0; }
-#user-tools a.lh-btn-outline { border: 1px solid var(--lh-orange); }
-#user-tools a.lh-btn-outline:hover, #user-tools a.lh-btn-outline:focus { border-color: var(--lh-orange-dark); color: var(--lh-orange-dark) !important; }
+#user-tools a.lh-btn-outline { border: 1px solid var(--lh-accent); }
+#user-tools a.lh-btn-outline:hover, #user-tools a.lh-btn-outline:focus { border-color: var(--lh-accent-dark); color: var(--lh-accent-dark) !important; }
 #user-tools .theme-toggle svg.theme-icon-when-auto,
 #user-tools .theme-toggle svg.theme-icon-when-dark,
 #user-tools .theme-toggle svg.theme-icon-when-light { fill: var(--lh-ink); color: var(--lh-canvas); }
@@ -332,13 +335,13 @@ svg { width: 18px; height: 18px; }
   transition: transform 0.1s ease, background 0.15s ease;
 }
 .lh-btn:active { transform: translateY(1px); }
-.lh-btn-primary { background: var(--lh-orange); color: #fff !important; box-shadow: 0 6px 16px rgba(242, 105, 42, 0.3); }
-.lh-btn-primary:hover { background: var(--lh-orange-dark); }
+.lh-btn-primary { background: var(--lh-accent); color: #fff !important; box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3); }
+.lh-btn-primary:hover { background: var(--lh-accent-dark); }
 .lh-btn-dark { background: #1f2023; color: #fff !important; }
 .lh-btn-dark:hover { background: #000; }
 .lh-btn-light { background: #fff; color: #1f2023 !important; }
-.lh-btn-outline { border-color: var(--lh-orange); color: var(--lh-orange) !important; background: transparent; }
-.lh-btn-outline:hover { background: var(--lh-orange-soft); }
+.lh-btn-outline { border-color: var(--lh-accent); color: var(--lh-accent) !important; background: transparent; }
+.lh-btn-outline:hover { background: var(--lh-accent-soft); }
 .lh-btn-block { width: 100%; box-sizing: border-box; }
 
 .button, input[type=submit], input[type=button], .submit-row input, a.button {
@@ -347,19 +350,19 @@ svg { width: 18px; height: 18px; }
   font-weight: 700;
 }
 .button.default, input[type=submit].default, .submit-row input.default {
-  background: var(--lh-orange);
-  box-shadow: 0 6px 16px rgba(242, 105, 42, 0.25);
+  background: var(--lh-accent);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
 }
 /* Django pulls object-tools up by -48px into the header; keep them in the content flow instead. */
 .lh-shell .object-tools { float: none; margin: 0 0 16px; display: flex; justify-content: flex-end; gap: 8px; }
 .lh-shell .object-tools li { float: none; height: auto; margin: 0; }
 .object-tools a:link, .object-tools a:visited {
   float: none; border-radius: 999px; padding: 8px 16px; font-size: 12px;
-  background: var(--lh-orange); color: #fff; text-transform: none; letter-spacing: 0;
+  background: var(--lh-accent); color: #fff; text-transform: none; letter-spacing: 0;
 }
-/* Link-buttons such as "Reset password" otherwise inherit the orange link colour. */
+/* Link-buttons such as "Reset password" otherwise inherit the accent link colour. */
 .lh-shell a.button:link, .lh-shell a.button:visited { color: var(--button-fg); }
-.object-tools a:focus, .object-tools a:hover { background: var(--lh-orange-dark); color: #fff; }
+.object-tools a:focus, .object-tools a:hover { background: var(--lh-accent-dark); color: #fff; }
 
 /* ---------- Cards and stock admin modules ---------- */
 
@@ -457,7 +460,7 @@ svg { width: 18px; height: 18px; }
   padding: 18px 18px 6px;
 }
 .lh-shell #changelist-filter h3 { color: var(--lh-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-.lh-shell #changelist-filter li.selected a { color: var(--lh-orange) !important; font-weight: 700; }
+.lh-shell #changelist-filter li.selected a { color: var(--lh-accent) !important; font-weight: 700; }
 .lh-shell #changelist-filter a:focus, .lh-shell #changelist-filter a:hover { color: var(--lh-ink) !important; }
 
 /* Messages */
@@ -499,7 +502,7 @@ ul.messagelist li.warning, ul.messagelist li.error { background-position: 16px 1
   transition: transform 0.15s ease;
 }
 a.lh-kpi:hover { transform: translateY(-2px); }
-.lh-kpi-orange { background: linear-gradient(135deg, #f47a35, var(--lh-orange)); box-shadow: 0 12px 28px rgba(242, 105, 42, 0.32); }
+.lh-kpi-orange { background: linear-gradient(135deg, #6366f1, var(--lh-accent)); box-shadow: 0 12px 28px rgba(79, 70, 229, 0.32); }
 .lh-kpi-icon {
   display: grid;
   place-items: center;
@@ -532,7 +535,7 @@ a.lh-kpi:hover { transform: translateY(-2px); }
 .lh-bar { height: 4px; border-radius: 999px; background: var(--lh-track); overflow: hidden; }
 .lh-bar-thin { height: 4px; }
 .lh-bar-fill { display: block; height: 100%; border-radius: inherit; }
-.lh-fill-orange { background: var(--lh-orange); }
+.lh-fill-orange { background: var(--lh-accent); }
 .lh-fill-blue { background: var(--lh-blue); }
 .lh-fill-green { background: var(--lh-green); }
 .lh-fill-amber { background: var(--lh-amber); }
@@ -557,8 +560,8 @@ a.lh-kpi:hover { transform: translateY(-2px); }
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: var(--lh-orange-soft);
-  color: var(--lh-orange-dark);
+  background: var(--lh-accent-soft);
+  color: var(--lh-accent-dark);
   font-weight: 700;
 }
 .lh-bar-label { display: block; font-size: 12px; font-weight: 600; color: var(--lh-blue); margin-bottom: 6px; }
@@ -574,7 +577,7 @@ a.lh-kpi:hover { transform: translateY(-2px); }
 .lh-timeline-item { position: relative; list-style: none; padding: 0 0 20px 32px; }
 .lh-timeline-item:last-child { padding-bottom: 0; }
 .lh-timeline-item a { color: var(--lh-ink) !important; text-decoration: none; font-size: 14px; }
-.lh-timeline-item a:hover strong { color: var(--lh-orange); }
+.lh-timeline-item a:hover strong { color: var(--lh-accent); }
 .lh-timeline-item small { display: block; margin-top: 3px; color: var(--lh-muted); font-size: 12px; font-weight: 600; }
 .lh-timeline-dot {
   position: absolute;
@@ -590,7 +593,7 @@ a.lh-kpi:hover { transform: translateY(-2px); }
 .lh-tone-delivered .lh-timeline-dot { border-color: var(--lh-green); }
 .lh-tone-failed .lh-timeline-dot, .lh-tone-partially_failed .lh-timeline-dot { border-color: var(--lh-red); }
 .lh-tone-unrouted .lh-timeline-dot { border-color: var(--lh-amber); }
-.lh-tone-routed .lh-timeline-dot, .lh-tone-fetched .lh-timeline-dot { border-color: var(--lh-orange); }
+.lh-tone-routed .lh-timeline-dot, .lh-tone-fetched .lh-timeline-dot { border-color: var(--lh-accent); }
 
 .lh-callout {
   display: flex;
@@ -599,7 +602,7 @@ a.lh-kpi:hover { transform: translateY(-2px); }
   padding: 16px 20px;
   margin-bottom: 24px;
   border-radius: var(--lh-radius);
-  background: var(--lh-orange-soft);
+  background: var(--lh-accent-soft);
   color: var(--lh-ink);
 }
 .lh-callout div { flex: 1; }
@@ -618,7 +621,7 @@ a.lh-kpi:hover { transform: translateY(-2px); }
   color: var(--lh-ink);
   font-weight: 700;
 }
-.lh-step.is-done .lh-step-number { background: var(--lh-orange); color: #fff; }
+.lh-step.is-done .lh-step-number { background: var(--lh-accent); color: #fff; }
 .lh-step h2 { margin: 2px 0 6px; padding: 0; font-size: 16px; color: var(--lh-ink); background: none; text-transform: none; letter-spacing: 0; }
 .lh-step p { margin: 0 0 12px; color: var(--lh-text); line-height: 1.6; }
 .lh-step form { margin: 0; }
@@ -657,7 +660,7 @@ body.login { background: var(--lh-canvas); }
 .login #branding .lh-brand { border: 0; padding: 0; justify-content: center; font-size: 20px; }
 .login #content { padding: 18px 28px 28px; }
 .login .submit-row { padding: 12px 0 0; margin: 0; background: none; box-shadow: none; }
-.login .submit-row input { width: 100%; background: var(--lh-orange); }
+.login .submit-row input { width: 100%; background: var(--lh-accent); }
 .login .form-row { padding: 6px 0; border: 0; }
 .login .form-row input { width: 100%; box-sizing: border-box; border-radius: var(--lh-radius-sm); padding: 10px 12px; }
 .login .lh-card-title { margin: 0 0 12px; font-size: 18px; text-align: center; color: var(--lh-ink); }
@@ -729,7 +732,7 @@ body.login { background: var(--lh-canvas); }
   overflow-x: auto;
 }
 
-.lh-btn-outline:link, .lh-btn-outline:visited { border-color: var(--lh-orange); }
+.lh-btn-outline:link, .lh-btn-outline:visited { border-color: var(--lh-accent); }
 
 /* Dark theme: dark cards need their own tone to stand off the dark canvas. */
 html[data-theme="dark"] .lh-kpi:not(.lh-kpi-orange),
@@ -759,7 +762,7 @@ html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3
 
 .lh-shell .submit-row input[type=submit], .lh-shell input[type=submit].default { text-transform: none; }
 .lh-shell .selector-chosen-title, .lh-shell .selector-chosen h2 {
-  background: var(--lh-orange-soft) !important;
+  background: var(--lh-accent-soft) !important;
   color: var(--lh-ink) !important;
 }
 .lh-shell .selector-available-title, .lh-shell .selector-available h2 {
@@ -775,7 +778,7 @@ html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3
 .lh-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; min-width: 0; }
 .lh-field span { font-size: 12px; font-weight: 700; color: var(--lh-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .lh-field select { width: 100%; height: 42px; }
-.lh-connect-arrow { font-size: 22px; color: var(--lh-orange); padding-bottom: 8px; }
+.lh-connect-arrow { font-size: 22px; color: var(--lh-accent); padding-bottom: 8px; }
 .lh-connect .lh-btn { height: 42px; }
 .lh-hint { margin-top: 14px; }
 .lh-callout-quiet { background: var(--lh-surface); box-shadow: var(--lh-shadow); }
@@ -792,7 +795,7 @@ html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3
   margin: 0;
   padding: 5px 6px 5px 12px;
   border-radius: 999px;
-  background: var(--lh-orange-soft);
+  background: var(--lh-accent-soft);
   color: var(--lh-ink);
   font-weight: 600;
   font-size: 12px;
@@ -837,7 +840,7 @@ html[data-theme="dark"] .lh-btn-dark { background: #2a2b31; border: 1px solid #3
   background: var(--lh-surface); border: 2px solid var(--lh-line); border-radius: var(--lh-radius-sm);
   box-shadow: var(--lh-shadow-sm); color: var(--lh-text); text-decoration: none;
 }
-a.lh-flow-node:hover { border-color: var(--lh-orange); text-decoration: none; }
+a.lh-flow-node:hover { border-color: var(--lh-accent); text-decoration: none; }
 .lh-flow-node strong { color: var(--body-loud-color); font-size: 13px; overflow-wrap: anywhere; }
 .lh-flow-detail { font-size: 12px; color: var(--lh-muted); overflow-wrap: anywhere; }
 .lh-flow-time { font-size: 11px; color: var(--lh-muted); }
@@ -867,7 +870,7 @@ a.lh-flow-node:hover { border-color: var(--lh-orange); text-decoration: none; }
   display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px; border: 1px solid var(--lh-line);
   border-radius: 999px; background: var(--lh-surface); color: var(--lh-text); font-size: 12px; cursor: pointer;
 }
-.lh-chip:hover { border-color: var(--lh-orange); color: var(--lh-orange); }
+.lh-chip:hover { border-color: var(--lh-accent); color: var(--lh-accent); }
 .lh-insert { display: flex; flex-direction: column; gap: 10px; }
 .lh-insert-row { display: flex; align-items: flex-start; gap: 12px; }
 .lh-insert-label { flex: none; width: 44px; padding-top: 5px; font-size: 12px; font-weight: 700; color: var(--lh-muted); }
@@ -880,13 +883,13 @@ a.lh-flow-node:hover { border-color: var(--lh-orange); text-decoration: none; }
   border-radius: var(--lh-radius-sm); background: var(--lh-surface); color: transparent;
   white-space: pre-wrap; overflow-wrap: break-word;
 }
-.lh-highlight-backdrop mark { color: transparent; background: rgba(242, 105, 42, 0.25); border-radius: 4px; }
+.lh-highlight-backdrop mark { color: transparent; background: rgba(79, 70, 229, 0.25); border-radius: 4px; }
 .lh-highlight-backdrop mark.lh-unknown { background: rgba(229, 72, 77, 0.3); text-decoration: underline wavy var(--lh-red); text-underline-offset: 3px; }
 
 /* Diagnostics page. */
 .lh-diag-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .lh-diag-title { display: flex; align-items: center; gap: 8px; padding: 20px 24px 6px; }
-.lh-diag-title svg { width: 18px; height: 18px; color: var(--lh-orange); }
+.lh-diag-title svg { width: 18px; height: 18px; color: var(--lh-accent); }
 .lh-card-flush .lh-table th[scope=row] { width: 34%; color: var(--lh-muted); font-weight: 600; }
 .lh-diag-dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--lh-track); }
 .lh-diag-ok { background: var(--lh-green); }
@@ -894,10 +897,10 @@ a.lh-flow-node:hover { border-color: var(--lh-orange); text-decoration: none; }
 .lh-diag-bad { background: var(--lh-red); }
 
 /* Statistics: filters, stat tiles, a single-series column chart, breakdown tables. */
-:root { --lh-chart: #f2692a; --lh-tip-bg: #1f2023; --lh-tip-line: transparent; }
-html[data-theme="dark"] { --lh-chart: #ea6426; --lh-tip-bg: #2e3036; --lh-tip-line: #3d4048; }
+:root { --lh-chart: #4f46e5; --lh-tip-bg: #1f2023; --lh-tip-line: transparent; }
+html[data-theme="dark"] { --lh-chart: #6366f1; --lh-tip-bg: #2e3036; --lh-tip-line: #3d4048; }
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) { --lh-chart: #ea6426; --lh-tip-bg: #2e3036; --lh-tip-line: #3d4048; }
+  html:not([data-theme="light"]) { --lh-chart: #6366f1; --lh-tip-bg: #2e3036; --lh-tip-line: #3d4048; }
 }
 .lh-stats-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
 .lh-segmented { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--lh-track); }
