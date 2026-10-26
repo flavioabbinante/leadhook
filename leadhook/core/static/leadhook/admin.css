@@ -515,7 +515,7 @@ a.lh-kpi:hover { transform: translateY(-2px); }
 .lh-kpi-label { font-size: 14px; color: rgba(255, 255, 255, 0.85); }
 
 .lh-card { padding: 22px 24px; box-sizing: border-box; min-width: 0; }
-.lh-card-flush { padding: 0; overflow: hidden; }
+.lh-card-flush { padding: 0; overflow-x: auto; }  /* auto, not hidden: wide tables scroll on phones */
 .lh-card-head { padding: 22px 24px 8px; }
 .lh-card-head-split { border-top: 1px solid var(--lh-line); margin-top: 8px; }
 .lh-card-title { margin: 0; padding: 0; font-size: 17px; font-weight: 700; color: var(--lh-ink); background: none; text-transform: none; letter-spacing: 0; }
@@ -534,6 +534,8 @@ a.lh-kpi:hover { transform: translateY(-2px); }
 .lh-fill-orange { background: var(--lh-orange); }
 .lh-fill-blue { background: var(--lh-blue); }
 .lh-fill-green { background: var(--lh-green); }
+.lh-fill-amber { background: var(--lh-amber); }
+.lh-fill-red { background: var(--lh-red); }
 
 .lh-status { font-weight: 700; }
 .lh-status-ok { color: var(--lh-green); }
@@ -870,8 +872,8 @@ html[data-theme="dark"] { --lh-chart: #ea6426; --lh-tip-bg: #2e3036; --lh-tip-li
 .lh-segmented { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--lh-track); }
 .lh-segmented button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: var(--lh-muted); cursor: pointer; }
 .lh-segmented button.is-active { background: var(--lh-surface); color: var(--body-loud-color); box-shadow: var(--lh-shadow-sm); }
-.lh-stats-select { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--lh-muted); }
-.lh-stats-select select { max-width: 320px; }
+.lh-stats-select { display: inline-flex; max-width: 100%; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--lh-muted); }
+.lh-stats-select select { max-width: 320px; min-width: 0; }
 .lh-stats-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
 .lh-stat { display: flex; flex-direction: column; gap: 6px; }
 .lh-stat-label { font-size: 13px; color: var(--lh-muted); }
