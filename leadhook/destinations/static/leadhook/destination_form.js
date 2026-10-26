@@ -43,7 +43,7 @@ document.addEventListener("change", (event) => {
   });
 });
 
-// Telegram message: highlight {placeholders} behind the textarea (orange known, red unknown).
+// Telegram message: highlight {placeholders} behind the textarea (indigo known, red unknown).
 document.addEventListener("DOMContentLoaded", () => {
   const message = document.getElementById("id_message_template");
   if (!message) return;
