@@ -21,6 +21,10 @@ class LeadAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def has_change_permission(self, request, obj=None):
+        # Every field is read-only: show the page in view mode, without useless Save buttons.
+        return False
+
     @admin.display(description="Percorso")
     def pipeline(self, lead: Lead):
         steps, branches = lead_pipeline(lead)
@@ -56,6 +60,10 @@ class WebhookEventAdmin(admin.ModelAdmin):
     actions = ["process_events"]
 
     def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # Every field is read-only: show the page in view mode, without useless Save buttons.
         return False
 
     @admin.action(description="Elabora gli eventi selezionati")

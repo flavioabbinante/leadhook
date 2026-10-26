@@ -16,7 +16,13 @@ from .services import (
     refresh_lead_status,
     schedule_retry,
 )
-from .sweep import stuck_deliveries, stuck_events, stuck_fetched_leads, stuck_received_leads
+from .sweep import (
+    stuck_deliveries,
+    stuck_events,
+    stuck_fetched_leads,
+    stuck_received_leads,
+    stuck_routed_leads,
+)
 
 SWEEP_BATCH = 500
 
@@ -45,6 +51,8 @@ def deliver(self, delivery_id: int) -> None:
         pk=delivery_id
     )
     if delivery.status != Delivery.Status.PENDING:
+        # A redelivery after a crash between the final save and the refresh below.
+        refresh_lead_status(delivery.lead)
         return
     if delivery.lead.purged_at is not None:
         mark_delivery_failed(
@@ -88,3 +96,5 @@ def sweep_stuck_work() -> None:
         route_lead.delay(pk)
     for pk in stuck_deliveries(now).values_list("pk", flat=True)[:SWEEP_BATCH]:
         deliver.delay(pk)
+    for lead in stuck_routed_leads(now)[:SWEEP_BATCH]:
+        refresh_lead_status(lead)

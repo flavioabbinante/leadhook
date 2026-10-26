@@ -97,7 +97,7 @@
                 {% csrf_token %}
                 <input type="hidden" name="source" value="{{ row.key }}">
                 <span class="lh-badge lh-badge-warning">{{ row.waiting }}</span>
-                {% if can_change %}<button class="lh-btn lh-btn-dark lh-btn-sm" type="submit" name="action" value="deliver_waiting">Consegna ora</button>{% endif %}
+                {% if can_change and row.routable %}<button class="lh-btn lh-btn-dark lh-btn-sm" type="submit" name="action" value="deliver_waiting">Consegna ora</button>{% elif not row.routable %}<small class="lh-muted">Collega una destinazione</small>{% endif %}
               </form>
             {% elif row.kind == "page" %}<span class="lh-muted">—</span>{% endif %}
           </td>

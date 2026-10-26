@@ -87,3 +87,20 @@ def test_staff_without_change_permission_cannot_connect(client):
     )
     assert response.status_code == 403
     assert not form.destinations.exists()
+
+
+def test_deliver_now_is_offered_only_when_the_page_has_a_route(admin_client):
+    lead = make_lead(status=Lead.Status.UNROUTED)
+    html = admin_client.get(ROUTING).content.decode()
+    assert 'value="deliver_waiting"' not in html
+    assert "Collega una destinazione" in html
+    lead.form.destinations.add(make_destination())
+    assert 'value="deliver_waiting"' in admin_client.get(ROUTING).content.decode()
+
+
+def test_deliver_now_is_hidden_when_the_only_route_is_paused(admin_client):
+    lead = make_lead(status=Lead.Status.UNROUTED)
+    lead.page.default_destinations.add(make_destination(name="Default"))
+    # The form's own (paused) destination replaces the page default: nothing would be sent.
+    lead.form.destinations.add(make_destination(name="Paused", active=False))
+    assert 'value="deliver_waiting"' not in admin_client.get(ROUTING).content.decode()
