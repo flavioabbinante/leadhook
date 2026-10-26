@@ -153,6 +153,7 @@ class DestinationAdmin(admin.ModelAdmin):
         obj = super().get_object(request, object_id, from_field)
         if obj is not None:
             # Per request: the admin instance is shared between threads.
+            obj._can_preview_leads = request.user.has_perm("leads.view_lead")
             obj._preview_lead_id = request.GET.get("preview_lead")
         return obj
 
@@ -171,6 +172,9 @@ class DestinationAdmin(admin.ModelAdmin):
     def payload_preview(self, obj: Destination):
         if not obj.pk:
             return "Salva la destinazione per vedere l'anteprima."
+        # The preview shows a real lead's personal data: only for who may view leads.
+        if not getattr(obj, "_can_preview_leads", False):
+            return "Serve il permesso di vedere i lead per l'anteprima."
         leads = Lead.objects.exclude(status=Lead.Status.RECEIVED).filter(purged_at__isnull=True)
         lead_id = getattr(obj, "_preview_lead_id", None)
         lead = leads.filter(leadgen_id=lead_id).first() if lead_id else leads.first()
