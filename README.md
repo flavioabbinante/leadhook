@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🪝 LeadHook
+<img src="docs/images/banner.jpg" alt="LeadHook" width="800">
 
 **Ogni lead di Facebook e Instagram, consegnato al webhook giusto: da tutte le tue pagine, con una sola app Meta.**
 
