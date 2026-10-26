@@ -36,15 +36,15 @@
     <p class="lh-card-subtitle">Ultimi 7 giorni · {{ delivery_total }} consegn{{ delivery_total|pluralize:"a,e" }}</p>
     <div class="lh-meter">
       <div class="lh-meter-head"><span>Consegnate</span><span>{{ delivery_success }}%</span></div>
-      <div class="lh-bar"><span class="lh-bar-fill lh-fill-orange" style="width: {{ delivery_success }}%"></span></div>
+      <div class="lh-bar"><span class="lh-bar-fill lh-fill-green" style="width: {{ delivery_success }}%"></span></div>
     </div>
     <div class="lh-meter">
       <div class="lh-meter-head"><span>In nuovo tentativo</span><span>{{ delivery_pending }}%</span></div>
-      <div class="lh-bar"><span class="lh-bar-fill lh-fill-orange" style="width: {{ delivery_pending }}%"></span></div>
+      <div class="lh-bar"><span class="lh-bar-fill lh-fill-amber" style="width: {{ delivery_pending }}%"></span></div>
     </div>
     <div class="lh-meter">
       <div class="lh-meter-head"><span>Fallite</span><span>{{ delivery_failed }}%</span></div>
-      <div class="lh-bar"><span class="lh-bar-fill lh-fill-orange" style="width: {{ delivery_failed }}%"></span></div>
+      <div class="lh-bar"><span class="lh-bar-fill lh-fill-red" style="width: {{ delivery_failed }}%"></span></div>
     </div>
     <div class="lh-card-footer">
       <p class="lh-muted">

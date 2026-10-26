@@ -355,3 +355,34 @@ def test_telegram_message_fields_are_grouped_by_form(admin_client):
     assert f'data-form="{form.pk}"' in content
     assert 'data-insert="{e-mail}"' in content
     assert 'data-insert="{campaign}"' in content
+
+
+def test_read_only_records_open_in_view_mode_without_save_buttons(admin_client):
+    lead = make_lead()
+    delivery = Delivery.objects.create(lead=lead, destination=make_destination())
+    for name, pk in [("leads_lead", lead.pk), ("destinations_delivery", delivery.pk)]:
+        html = admin_client.get(reverse(f"admin:{name}_change", args=[pk])).content.decode()
+        assert 'name="_save"' not in html
+
+
+def test_payload_preview_prefers_leads_sent_to_the_destination(admin_client):
+    form = make_form()
+    destination = make_destination()
+    make_lead(form, leadgen_id="other")
+    sent = make_lead(form, leadgen_id="sent-here")
+    Delivery.objects.create(lead=sent, destination=destination)
+    html = admin_client.get(
+        reverse("admin:destinations_destination_change", args=[destination.pk])
+    ).content.decode()
+    assert "Lead usato: sent-here" in html
+
+
+def test_payload_preview_can_still_pick_a_lead_never_sent_to_the_destination(admin_client):
+    form = make_form()
+    destination = make_destination()
+    old = make_lead(form, leadgen_id="old")
+    Delivery.objects.create(lead=old, destination=destination)
+    make_lead(form, leadgen_id="new")
+    url = reverse("admin:destinations_destination_change", args=[destination.pk])
+    assert "Lead usato: new" in admin_client.get(url, {"preview_lead": "new"}).content.decode()
+    assert 'href="?preview_lead=new"' in admin_client.get(url).content.decode()
