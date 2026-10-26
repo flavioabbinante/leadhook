@@ -6,6 +6,7 @@ html[data-theme="light"] {
   --lh-orange-dark: #d9561a;
   --lh-orange-soft: #fde9df;
   --lh-ink: #1f2023;
+  --lh-indigo: #4f46e5;
   --lh-ink-soft: #2b2c30;
   --lh-text: #343a40;
   --lh-muted: #7b8191;
@@ -170,7 +171,7 @@ svg { width: 18px; height: 18px; }
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: var(--lh-orange);
+  background: var(--lh-indigo);
   color: #fff;
 }
 .lh-sidebar-nav { flex: 1; }
