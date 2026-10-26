@@ -1,10 +1,12 @@
 from django.contrib import admin
+from django.contrib.auth import views as auth_views
 from django.urls import path
 from django.views.generic import RedirectView
 
 from leadhook.core.diagnostics import diagnostics_view
 from leadhook.core.invitations import accept_invitation
-from leadhook.core.views import health
+from leadhook.core.twofactor import two_factor
+from leadhook.core.views import ThrottledPasswordResetView, health
 from leadhook.leads.stats import stats_view
 from leadhook.meta.facebook_login import facebook_callback, facebook_login
 from leadhook.meta.setup import setup_view
@@ -30,6 +32,26 @@ urlpatterns = [
     path("admin/routing/", admin.site.admin_view(routing_view), name="routing"),
     path("admin/stats/", admin.site.admin_view(stats_view), name="stats"),
     path("admin/diagnostics/", admin.site.admin_view(diagnostics_view), name="diagnostics"),
+    path("admin/2fa/", admin.site.admin_view(two_factor), name="two-factor"),
+    # The admin login page links to "admin_password_reset" once that URL exists.
+    path(
+        "admin/password_reset/", ThrottledPasswordResetView.as_view(), name="admin_password_reset"
+    ),
+    path(
+        "admin/password_reset/done/",
+        auth_views.PasswordResetDoneView.as_view(),
+        name="password_reset_done",
+    ),
+    path(
+        "admin/reset/<uidb64>/<token>/",
+        auth_views.PasswordResetConfirmView.as_view(),
+        name="password_reset_confirm",
+    ),
+    path(
+        "admin/reset/done/",
+        auth_views.PasswordResetCompleteView.as_view(),
+        name="password_reset_complete",
+    ),
     path("admin/", admin.site.urls),
     path("invite/<str:token>/", accept_invitation, name="accept-invitation"),
     path("health/", health, name="health"),
