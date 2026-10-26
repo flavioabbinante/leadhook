@@ -39,7 +39,7 @@ urlpatterns = [
     ),
     path(
         "admin/password_reset/done/",
-        auth_views.PasswordResetDoneView.as_view(),
+        auth_views.PasswordResetDoneView.as_view(extra_context={"title": "Controlla la tua email"}),
         name="password_reset_done",
     ),
     path(
