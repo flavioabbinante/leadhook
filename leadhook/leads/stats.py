@@ -1,7 +1,7 @@
 """Campaign statistics: leads per day and per campaign, ad set, ad and form."""
 
 import csv
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
@@ -23,6 +23,11 @@ BREAKDOWNS = (
 NO_NAME = "Senza nome (organico o non disponibile)"
 ALL_CAMPAIGNS = "__all__"  # "" is a real filter value: leads without a campaign name
 
+DROP_WINDOW = timedelta(hours=6)
+DROP_WEEKS = 4
+DROP_MIN_EXPECTED = 5  # below this the usual volume is too small to tell a drop from noise
+DROP_RATIO = 0.3
+
 
 def period_leads(days: int, today: date) -> QuerySet:
     """Leads of the last `days` local days, annotated with the local day they were sent."""
@@ -30,6 +35,23 @@ def period_leads(days: int, today: date) -> QuerySet:
     sent = Coalesce("created_time", "received_at")
     day = TruncDate(sent, tzinfo=timezone.get_current_timezone())
     return Lead.objects.annotate(day=day).filter(day__gte=start, day__lte=today)
+
+
+def lead_drop(now: datetime) -> tuple[int, float] | None:
+    """(received, expected) when the last DROP_WINDOW got far fewer leads than the same hours
+    of the previous DROP_WEEKS weeks, else None. Test leads (manual) don't count."""
+    # shortcut: plain same-hours average; swap in a forecasting model if it raises false alarms.
+    leads = Lead.objects.exclude(source=Lead.Source.MANUAL)
+
+    def received(end: datetime) -> int:
+        return leads.filter(received_at__gte=end - DROP_WINDOW, received_at__lt=end).count()
+
+    expected = sum(received(now - timedelta(weeks=w)) for w in range(1, DROP_WEEKS + 1))
+    expected /= DROP_WEEKS
+    actual = received(now)
+    if expected >= DROP_MIN_EXPECTED and actual < expected * DROP_RATIO:
+        return actual, expected
+    return None
 
 
 def daily_counts(leads: QuerySet, days: int, today: date) -> list[dict]:
