@@ -7,6 +7,8 @@ from django.contrib.auth.models import Group
 from django.db import models
 from django.utils import timezone
 
+from .fields import EncryptedTextField
+
 
 class Workspace(models.Model):
     name = models.CharField(max_length=200)
@@ -94,3 +96,25 @@ class Invitation(models.Model):
         if self.accepted_at:
             return "Accettato"
         return "In attesa" if self.is_pending else "Scaduto"
+
+
+class TwoFactorDevice(models.Model):
+    """The TOTP authenticator of a user; deleting it makes them enroll again at next login."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="two_factor",
+        verbose_name="utente",
+    )
+    secret = EncryptedTextField(editable=False)
+    confirmed_at = models.DateTimeField("attivato il", null=True, blank=True)
+    # Last accepted time step: a code is never accepted twice.
+    last_counter = models.PositiveBigIntegerField(default=0, editable=False)
+
+    class Meta:
+        verbose_name = "verifica in due passaggi"
+        verbose_name_plural = "verifiche in due passaggi"
+
+    def __str__(self) -> str:
+        return str(self.user)

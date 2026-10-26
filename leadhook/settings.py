@@ -57,6 +57,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "leadhook.core.middleware.EncryptionKeyErrorMiddleware",
+    "leadhook.core.middleware.TwoFactorMiddleware",
 ]
 
 ROOT_URLCONF = "leadhook.urls"
@@ -109,6 +110,8 @@ STORAGES = {
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_HTTPONLY = True
+# An admin session lasts a working day instead of Django's two weeks.
+SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=12 * 3600)
 # Lets a container or load-balancer probe call /health/ over plain HTTP.
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 if not DEBUG:
