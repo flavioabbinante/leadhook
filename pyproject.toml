@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 dependencies = [
-    "django>=5.2,<6.0",
+    "django>=5.2,<7.0",
     "celery[redis]>=5.4,<6.0",
     "django-environ>=0.11",
     "cryptography>=43,<48",
