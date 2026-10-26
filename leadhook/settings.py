@@ -57,6 +57,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "leadhook.core.middleware.EncryptionKeyErrorMiddleware",
+    "leadhook.core.middleware.TwoFactorMiddleware",
 ]
 
 ROOT_URLCONF = "leadhook.urls"
@@ -88,6 +89,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTHENTICATION_BACKENDS = ["leadhook.core.auth.NoDeleteModelBackend"]
+# Only the admin has a login page (the password reset pages link to it).
+LOGIN_URL = "admin:login"
 
 # The admin's "delete selected" confirmation posts one field per object; the default (1000)
 # makes deleting a few thousand leads or deliveries at once fail with TooManyFieldsSent.
@@ -109,6 +112,8 @@ STORAGES = {
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_HTTPONLY = True
+# An admin session lasts a working day instead of Django's two weeks.
+SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=12 * 3600)
 # Lets a container or load-balancer probe call /health/ over plain HTTP.
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 if not DEBUG:
