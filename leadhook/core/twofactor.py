@@ -74,9 +74,9 @@ def two_factor(request: HttpRequest) -> HttpResponse:
         next_url = reverse("admin:index")
     error = None
     if request.method == "POST":
-        key = f"2fa:{request.user.pk}"
-        if not take_attempt(key):
-            error = "Troppi tentativi sbagliati. Riprova tra 15 minuti."
+        reservation = take_attempt(f"2fa:{request.user.pk}")
+        if reservation is None:
+            error = "Troppi tentativi sbagliati. Riprova tra qualche minuto."
         else:
             with transaction.atomic():
                 # Lock the row so the same code cannot be used by two parallel requests.
@@ -88,7 +88,7 @@ def two_factor(request: HttpRequest) -> HttpResponse:
                     device.confirmed_at = device.confirmed_at or timezone.now()
                     device.save(update_fields=["last_counter", "confirmed_at"])
             if accepted:
-                give_back_attempt(key)
+                give_back_attempt(reservation)
                 request.session.cycle_key()
                 request.session[SESSION_KEY] = device.pk
                 return redirect(next_url)
