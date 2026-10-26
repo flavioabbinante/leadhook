@@ -37,6 +37,12 @@ def _unrouted(source: Page | Form):
     return Lead.objects.filter(page=page, status=Lead.Status.UNROUTED, purged_at__isnull=True)
 
 
+def _has_route(form: Form | None, page_destinations: list) -> bool:
+    """Same rule as resolve_destinations: own form destinations win, even paused ones."""
+    own = list(form.destinations.all()) if form is not None else []
+    return any(destination.active for destination in own or page_destinations)
+
+
 def routing_view(request):
     if request.method == "POST":
         if not request.user.has_perms(REQUIRED_PERMISSIONS):
@@ -60,9 +66,16 @@ def routing_view(request):
         .values_list("page")
         .annotate(n=Count("pk"))
     )
+    # (page, form) of the waiting leads, to tell whether "Deliver now" would send any of them.
+    waiting_sources = set(
+        Lead.objects.filter(status=Lead.Status.UNROUTED, purged_at__isnull=True)
+        .values_list("page", "form")
+        .distinct()
+    )
     rows = []
     for page in pages:
         page_destinations = list(page.default_destinations.all())
+        forms = {form.pk: form for form in page.forms.all()}
         rows.append(
             {
                 "kind": "page",
@@ -70,6 +83,11 @@ def routing_view(request):
                 "key": f"page:{page.pk}",
                 "destinations": page_destinations,
                 "waiting": waiting.get(page.pk, 0),
+                "routable": any(
+                    _has_route(forms.get(form_pk), page_destinations)
+                    for page_pk, form_pk in waiting_sources
+                    if page_pk == page.pk
+                ),
             }
         )
         for form in page.forms.all():
@@ -88,7 +106,8 @@ def routing_view(request):
         "title": "Routing",
         "rows": rows,
         "pages": pages,
-        "destinations": destinations,
+        # Active first, so the menu does not preselect a paused destination.
+        "destinations": destinations.order_by("-active", "name"),
         "can_change": request.user.has_perms(REQUIRED_PERMISSIONS),
     }
     return TemplateResponse(request, TEMPLATE, context)
