@@ -1,6 +1,7 @@
 import json
 from unittest import mock
 
+import pytest
 from django.test import Client
 from django.urls import reverse
 
@@ -66,22 +67,21 @@ def test_signed_event_is_stored_and_processed(django_capture_on_commit_callbacks
     delay.assert_called_once_with(event.pk)
 
 
-def test_bad_signature_is_stored_but_not_processed(client, django_capture_on_commit_callbacks):
+@pytest.mark.parametrize("signature", [None, sign(b"{}", secret="attacker"), "sha256=\u00e9"])
+def test_bad_or_missing_signature_is_not_stored(client, signature, caplog):
     app = make_meta_app()
-    body = json.dumps(leadgen_payload()).encode()
-    with mock.patch("leadhook.meta.views.process_event.delay") as delay:
-        with django_capture_on_commit_callbacks(execute=True):
-            response = client.post(
-                _url(app),
-                data=body,
-                content_type="application/json",
-                HTTP_X_HUB_SIGNATURE_256=sign(body, secret="attacker"),
-            )
-    assert response.status_code == 200
-    event = WebhookEvent.objects.get()
-    assert not event.signature_ok
-    assert event.error == "Firma non valida"
-    delay.assert_not_called()
+    body = json.dumps({"padding": "x" * 10_000}).encode()
+    headers = {} if signature is None else {"HTTP_X_HUB_SIGNATURE_256": signature}
+    with mock.patch("leadhook.meta.views.json.loads") as loads:
+        for _ in range(3):
+            response = client.post(_url(app), data=body, content_type="application/json", **headers)
+            assert response.status_code == 200
+    loads.assert_not_called()  # never parsed before authentication
+    assert not WebhookEvent.objects.exists()
+    # Throttled audit: one warning for the burst, no payload in it.
+    warnings = [r for r in caplog.records if "invalid signature" in r.getMessage()]
+    assert len(warnings) == 1
+    assert "padding" not in warnings[0].getMessage()
 
 
 def test_non_json_body_is_stored_without_crashing(client, django_capture_on_commit_callbacks):
@@ -112,18 +112,6 @@ def test_non_ascii_verify_token_is_forbidden(client):
     assert response.status_code == 403
 
 
-def test_non_ascii_signature_header_is_stored_as_invalid(client):
-    app = make_meta_app()
-    response = client.post(
-        _url(app),
-        data=b"{}",
-        content_type="application/json",
-        HTTP_X_HUB_SIGNATURE_256="sha256=\u00e9",
-    )
-    assert response.status_code == 200
-    assert not WebhookEvent.objects.get(meta_app=app).signature_ok
-
-
 def test_nul_characters_are_stripped_from_payload(client):
     app = make_meta_app()
     body = json.dumps({"a": ["x\u0000y"], "b\u0000": {"c": "d\u0000"}}).encode()
@@ -136,7 +124,10 @@ def test_nul_characters_are_stripped_from_payload(client):
 
 def test_nul_in_unparseable_body_is_stripped(client):
     app = make_meta_app()
-    response = client.post(_url(app), data=b"a\x00b", content_type="text/plain")
+    body = b"a\x00b"
+    response = client.post(
+        _url(app), data=body, content_type="text/plain", HTTP_X_HUB_SIGNATURE_256=sign(body)
+    )
     assert response.status_code == 200
     assert WebhookEvent.objects.get().payload == {"unparseable_body": "ab"}
 

@@ -3,6 +3,7 @@ import json
 import logging
 import re
 
+from django.core.cache import cache
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
@@ -18,6 +19,8 @@ from .signature import verify_signature
 logger = logging.getLogger(__name__)
 
 MAX_STORED_UNPARSEABLE_BODY = 10_000
+# At most one warning per app in this window, however many unsigned requests arrive.
+BAD_SIGNATURE_LOG_INTERVAL_S = 60
 # json.loads joins valid surrogate pairs, so any surrogate left in a string is unpaired.
 LONE_SURROGATE = re.compile("[\ud800-\udfff]")
 
@@ -58,10 +61,18 @@ def meta_webhook(request: HttpRequest, webhook_uuid) -> HttpResponse:
             return HttpResponse(request.GET.get("hub.challenge", ""), content_type="text/plain")
         return HttpResponseForbidden("Token di verifica non valido")
 
+    # Django caps the body at DATA_UPLOAD_MAX_MEMORY_SIZE before we read it.
     raw_body = request.body
-    signature_ok = verify_signature(
+    if not verify_signature(
         meta_app.app_secret, raw_body, request.headers.get("X-Hub-Signature-256")
-    )
+    ):
+        # Nothing is parsed or stored before authentication: unsigned floods cost no rows.
+        throttle_key = f"meta-webhook-bad-signature:{meta_app.pk}"
+        if cache.add(throttle_key, True, BAD_SIGNATURE_LOG_INTERVAL_S):
+            logger.warning("Rejected webhook with invalid signature for Meta app %s", meta_app.pk)
+        # 200 anyway: Meta retries non-2xx responses, and attackers learn nothing.
+        return HttpResponse("OK", content_type="text/plain")
+
     try:
         payload = json.loads(raw_body)
     except ValueError:
@@ -75,13 +86,6 @@ def meta_webhook(request: HttpRequest, webhook_uuid) -> HttpResponse:
     else:
         payload = _clean_strings(payload)
 
-    event = WebhookEvent.objects.create(
-        meta_app=meta_app,
-        payload=payload,
-        signature_ok=signature_ok,
-        error="" if signature_ok else "Firma non valida",
-    )
-    if signature_ok:
-        transaction.on_commit(lambda: _enqueue(event.pk))
-    # Always 200: Meta retries non-2xx responses, and attackers learn nothing.
+    event = WebhookEvent.objects.create(meta_app=meta_app, payload=payload, signature_ok=True)
+    transaction.on_commit(lambda: _enqueue(event.pk))
     return HttpResponse("OK", content_type="text/plain")

@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest import mock
 
 from django.contrib import admin as django_admin
+from django.contrib.auth.models import Permission, User
 from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.utils import timezone
@@ -355,3 +356,19 @@ def test_telegram_message_fields_are_grouped_by_form(admin_client):
     assert f'data-form="{form.pk}"' in content
     assert 'data-insert="{e-mail}"' in content
     assert 'data-insert="{campaign}"' in content
+
+
+def test_payload_preview_needs_lead_permission(client):
+    lead = make_lead(data={"email": "security-proof@example.test"})
+    destination = make_destination(payload_template="{{ data | tojson }}")
+    user = User.objects.create_user("staff", password="pw", is_staff=True)
+    user.user_permissions.add(Permission.objects.get(codename="view_destination"))
+    client.force_login(user)
+    url = reverse("admin:destinations_destination_change", args=[destination.pk])
+    html = client.get(url + f"?preview_lead={lead.leadgen_id}").content.decode()
+    assert "security-proof@example.test" not in html
+    assert "preview_lead=" not in html
+    assert "Serve il permesso di vedere i lead" in html
+
+    user.user_permissions.add(Permission.objects.get(codename="view_lead"))
+    assert "security-proof@example.test" in client.get(url).content.decode()
