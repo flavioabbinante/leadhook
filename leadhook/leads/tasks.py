@@ -50,7 +50,7 @@ def process_event(event_id: int) -> None:
 @shared_task(bind=True, max_retries=None)
 def fetch_lead(self, lead_id: int, attempt: int = 0) -> None:
     lead = Lead.objects.select_related("page__meta_app", "form").get(pk=lead_id)
-    if lead.status != Lead.Status.RECEIVED:
+    if lead.status != Lead.Status.RECEIVED or lead.purged_at is not None:
         return
     outcome = fetch_lead_details(lead)
     if outcome == FetchOutcome.RETRY:

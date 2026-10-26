@@ -23,6 +23,7 @@ def stuck_received_leads(now: datetime) -> QuerySet[Lead]:
     """Leads whose fetch gave up or was lost; a failed fetch saves its error, bumping updated_at."""
     return Lead.objects.filter(
         status=Lead.Status.RECEIVED,
+        purged_at__isnull=True,
         updated_at__lt=now - REFETCH_EVERY,
         received_at__gte=now - REFETCH_FOR,
     )
@@ -30,6 +31,16 @@ def stuck_received_leads(now: datetime) -> QuerySet[Lead]:
 
 def stuck_fetched_leads(now: datetime) -> QuerySet[Lead]:
     return Lead.objects.filter(status=Lead.Status.FETCHED, updated_at__lt=now - STUCK_AFTER)
+
+
+def stuck_routed_leads(now: datetime) -> QuerySet[Lead]:
+    """ROUTED leads whose deliveries are all final: the worker died before refresh_lead_status."""
+    return (
+        Lead.objects.filter(status=Lead.Status.ROUTED, updated_at__lt=now - STUCK_AFTER)
+        .filter(deliveries__isnull=False)
+        .exclude(deliveries__status=Delivery.Status.PENDING)
+        .distinct()
+    )
 
 
 def stuck_deliveries(now: datetime) -> QuerySet[Delivery]:
