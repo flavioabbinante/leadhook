@@ -35,7 +35,7 @@
           <button class="lh-btn lh-btn-primary" type="submit" name="action" value="save_app">Salva e collega con Facebook</button>
         </form>
       {% endif %}
-      {% if meta_app %}
+      {% if meta_app and can_view_app %}
       <details class="lh-details">
         <summary>Valori del webhook, per configurarlo a mano</summary>
         <p>Nell'app Meta apri <strong>Webhooks</strong>, scegli <strong>Page</strong>,
@@ -54,7 +54,9 @@
     <span class="lh-step-number">{% if has_pages %}<svg aria-hidden="true"><use href="#lh-check"></use></svg>{% else %}3{% endif %}</span>
     <div>
       <h2>Pagine</h2>
-      {% if available_pages is not None %}
+      {% if not can_connect_pages %}
+        <p>Non hai il permesso di collegare pagine e form.</p>
+      {% elif available_pages is not None %}
         <form method="post">{% csrf_token %}
           {% for page in available_pages %}
             <label class="lh-page-choice"><input type="checkbox" name="page_ids" value="{{ page.id }}"{% if page.connected %} checked{% endif %}>
@@ -87,7 +89,9 @@
     <span class="lh-step-number">{% if has_lead %}<svg aria-hidden="true"><use href="#lh-check"></use></svg>{% else %}5{% endif %}</span>
     <div>
       <h2>Lead di prova</h2>
-      {% if forms %}
+      {% if not can_test_lead %}
+        <p>Non hai il permesso di inviare lead di prova sui form.</p>
+      {% elif forms %}
         <p>Meta crea un lead di prova sul form e invia il webhook, così attraversa tutta la pipeline.</p>
         <form method="post" class="lh-actions">{% csrf_token %}
           <label for="form_id" class="lh-muted">Form</label>

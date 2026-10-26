@@ -20,6 +20,17 @@ from .services import connect_page
 
 TEMPLATE = "admin/leadhook_setup.html"
 
+# Each step needs the model permissions of what it reads or changes, checked before Graph calls.
+VIEW_APP = ("meta.view_metaapp",)
+CONNECT_PAGES = ("meta.add_page", "meta.change_page", "meta.add_form", "meta.change_form")
+TEST_LEAD = ("meta.view_form", "meta.change_form")
+ACTION_PERMISSIONS = {
+    "verify": VIEW_APP,
+    "load_pages": CONNECT_PAGES,
+    "connect_pages": CONNECT_PAGES,
+    "test_lead": TEST_LEAD,
+}
+
 
 class AppCredentialsForm(SecretAwareModelForm):
     secret_fields = ("app_secret",)
@@ -51,15 +62,21 @@ def setup_complete() -> bool:
 def setup_view(request):
     status = setup_status()
     meta_app = status["meta_app"]
+    can_test_lead = request.user.has_perms(TEST_LEAD)
     context = {
         **site.each_context(request),
         **status,
         "title": "Configurazione guidata",
         "login_redirect_url": MetaApp.login_redirect_url(),
         "available_pages": None,
+        "can_view_app": request.user.has_perms(VIEW_APP),
+        "can_connect_pages": request.user.has_perms(CONNECT_PAGES),
+        "can_test_lead": can_test_lead,
         "forms": Form.objects.filter(page__subscribed=True)
         .select_related("page")
-        .order_by("page__name", "name"),
+        .order_by("page__name", "name")
+        if can_test_lead
+        else Form.objects.none(),
     }
     app_form = AppCredentialsForm(instance=meta_app)
     if request.method == "POST" and request.POST.get("action") == "save_app":
@@ -74,6 +91,8 @@ def setup_view(request):
             return redirect("facebook-login")
     elif request.method == "POST" and meta_app is not None:
         action = request.POST.get("action")
+        if not request.user.has_perms(ACTION_PERMISSIONS.get(action, ())):
+            raise PermissionDenied
         if action == "verify":
             _verify_webhook(request, meta_app)
         elif action == "load_pages":
@@ -86,7 +105,7 @@ def setup_view(request):
             _send_test_lead(request, request.POST.get("form_id", ""))
         return redirect("setup")
     context["app_form"] = app_form
-    if request.GET.get("load") == "pages" and status["has_app"]:
+    if request.GET.get("load") == "pages" and status["has_app"] and context["can_connect_pages"]:
         # Straight after “Connect with Facebook”: show the pages without another click.
         context["available_pages"] = _load_pages(request, meta_app)
     return TemplateResponse(request, TEMPLATE, context)
