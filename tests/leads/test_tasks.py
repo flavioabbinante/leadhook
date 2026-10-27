@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest import mock
 
+import numpy as np
 import pytest
 import responses
 from celery.exceptions import Retry
@@ -161,7 +162,19 @@ def _leads_at(when, count, start=0):
         Lead.objects.filter(pk=lead.pk).update(received_at=when)
 
 
-def test_check_lead_drop_alerts_once_when_volume_collapses(mailoutbox):
+@pytest.fixture
+def no_forecast():
+    with mock.patch("leadhook.leads.stats._forecaster", side_effect=ImportError):
+        yield
+
+
+def _fake_forecaster(median, low):
+    forecast = mock.Mock(median=np.full(6, median / 6))
+    forecast.quantile.return_value = np.full(6, low / 6)
+    return mock.Mock(forecast=mock.Mock(return_value=forecast))
+
+
+def test_check_lead_drop_alerts_once_when_volume_collapses(mailoutbox, no_forecast):
     now = timezone.now()
     for week in range(1, 5):
         _leads_at(now - timedelta(weeks=week, hours=1), 10, start=week * 100)
@@ -172,7 +185,7 @@ def test_check_lead_drop_alerts_once_when_volume_collapses(mailoutbox):
     assert "sono arrivati 2 lead" in mailoutbox[0].body
 
 
-def test_lead_drop_ignores_normal_and_low_volume():
+def test_lead_drop_ignores_normal_and_low_volume(no_forecast):
     now = timezone.now()
     for week in range(1, 5):
         _leads_at(now - timedelta(weeks=week, hours=1), 10, start=week * 100)
@@ -181,3 +194,16 @@ def test_lead_drop_ignores_normal_and_low_volume():
     Lead.objects.all().delete()
     _leads_at(now - timedelta(weeks=1, hours=1), 4)  # average 1 per window: too few to judge
     assert lead_drop(now) is None
+
+
+def test_lead_drop_uses_timestral_forecast():
+    now = timezone.now()
+    _leads_at(now - timedelta(weeks=1, hours=1), 3, start=100)
+    _leads_at(now - timedelta(hours=1), 6)
+    with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
+        forecaster.return_value = _fake_forecaster(median=20, low=8)
+        assert lead_drop(now) == (6, 20)
+        history = forecaster.return_value.forecast.call_args.args[0]
+        assert len(history) == 4 * 7 * 24 and history.sum() == 3
+        forecaster.return_value = _fake_forecaster(median=20, low=5)
+        assert lead_drop(now) is None  # 6 leads are within the forecast range
