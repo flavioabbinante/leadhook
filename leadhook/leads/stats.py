@@ -2,6 +2,7 @@
 
 import csv
 import functools
+import hashlib
 import logging
 import math
 from datetime import UTC, date, datetime, time, timedelta
@@ -122,13 +123,18 @@ def lead_drop(now: datetime) -> tuple[int, float] | None:
     return (actual, expected) if _is_drop(actual, expected, low) else None
 
 
-def period_cache_key(first_day: date, days: int) -> str:
-    return f"lead_forecast:{first_day.isoformat()}:{days}"
+def period_cache_key(first_day: date, days: int, campaign: str | None = None) -> str:
+    # Campaign names are free text: hashed, they make a safe cache key.
+    scope = "all" if campaign is None else hashlib.sha256(campaign.encode()).hexdigest()[:16]
+    return f"lead_forecast:{first_day.isoformat()}:{days}:{scope}"
 
 
-def forecast_period(first_day: date, days: int, now: datetime) -> dict | None:
-    """What Timestral expected in `days` local days from `first_day`, up to `now`: each
-    DROP_WINDOW block forecast from the DROP_WEEKS weeks before it, as the hourly check does.
+def forecast_period(
+    first_day: date, days: int, now: datetime, campaign: str | None = None
+) -> dict | None:
+    """What Timestral expected in `days` local days from `first_day`, up to `now`, for one
+    campaign or all of them: hourly bands from a forecast per DROP_WINDOW block (made before the
+    block, from the DROP_WEEKS weeks behind it), and when the hourly check would have alerted.
     None without Timestral or for a day still to come."""
     window = int(DROP_WINDOW.total_seconds() // 3600)
     context = DROP_WEEKS * 7 * 24
@@ -139,27 +145,40 @@ def forecast_period(first_day: date, days: int, now: datetime) -> dict | None:
     hours = int((end - start) / timedelta(hours=1))
     if hours <= 0:
         return None
-    counts = hourly_counts(
-        Lead.objects.exclude(source=Lead.Source.MANUAL),
-        start - timedelta(hours=context),
-        context + hours,
-    )
-    # shortcut: blocks follow UTC hours, so after a summer-time switch they start an hour off the
-    # local clock (11-17 instead of 12-18); align them per local day if that ever confuses anyone.
-    blocks = range(0, hours, window)
-    forecasts = _forecast([counts[b : b + context] for b in blocks], window)
+    leads = Lead.objects.exclude(source=Lead.Source.MANUAL)
+    if campaign is not None:
+        leads = leads.filter(campaign_name=campaign)
+    base = context + window - 1  # index of the period's first hour: checks look back that far
+    counts = hourly_counts(leads, start - timedelta(hours=base), base + hours)
+
+    # Blocks on the local clock (00, 06, 12, 18): the summer-time switch makes one 5 or 7 hours.
+    starts = [
+        datetime.combine(first_day + timedelta(days=d), time(h), tzinfo=tz).astimezone(UTC)
+        for d in range(days)
+        for h in range(0, 24, window)
+    ]
+    offsets = [b for b in (int((at - start) / timedelta(hours=1)) for at in starts) if b < hours]
+    bounds = list(zip(offsets, [*offsets[1:], hours], strict=True))
+    # Every hourly check whose window ends in the period: a drop across two blocks still shows.
+    checks = range(1 - window, hours - window + 1)
+    histories = [counts[base + b - context : base + b] for b in (*offsets, *checks)]
+    forecasts = _forecast(histories, max(window, *(e - b for b, e in bounds)))
     if forecasts is None:
         return None
-    snapshot = {"end": end, "counts": counts[context:], "median": [], "low": [], "high": []}
-    snapshot["alerts"] = []
-    for b, block in zip(blocks, forecasts, strict=True):
-        n = min(window, hours - b)  # today's last block stops at the current hour
-        median, low, high = (values[:n] for values in block)
+
+    snapshot = {"end": end, "counts": counts[base:], "median": [], "low": [], "high": []}
+    for (b, e), block in zip(bounds, forecasts[: len(bounds)], strict=True):
+        median, low, high = (values[: e - b] for values in block)  # today stops at this hour
         snapshot["median"] += median
         snapshot["low"] += low
         snapshot["high"] += high
-        if _is_drop(sum(counts[context + b : context + b + n]), sum(median), sum(low)):
-            snapshot["alerts"].append(start + timedelta(hours=b))
+    snapshot["alerts"] = []
+    for s, check in zip(checks, forecasts[len(bounds) :], strict=True):
+        median, low, _ = (values[:window] for values in check)
+        at = start + timedelta(hours=s + window)  # when the hourly check runs
+        muted = snapshot["alerts"] and at - snapshot["alerts"][-1] < timedelta(days=1)
+        if not muted and _is_drop(sum(counts[base + s : base + s + window]), sum(median), sum(low)):
+            snapshot["alerts"].append(at)  # then check_lead_drop stays quiet for a day
     return snapshot
 
 
@@ -270,17 +289,20 @@ def stats_view(request):
         forecast_day = None
     if forecast_day is not None and forecast_day > today:
         forecast_day = None
+    if forecast_day is None and campaign is not None:
+        # The hourly check covers all campaigns: for one campaign, review yesterday and today.
+        forecast_day, forecast_days = today - timedelta(days=1), 2
     forecast_pending = forecast_unavailable = False
     if forecast_day is None:
         forecast = forecast_chart(cache.get(FORECAST_CACHE_KEY))
     else:
         from .tasks import forecast_lead_period  # tasks imports this module
 
-        key = period_cache_key(forecast_day, forecast_days)
+        key = period_cache_key(forecast_day, forecast_days, campaign)
         result = cache.get(key)
-        # Up to ~30 s of CPU: the worker computes it, the page reloads until it's there.
+        # Up to ~30 s of CPU: the worker computes it, the card refreshes until it's there.
         if result is None and cache.add(f"{key}:pending", 1, timeout=600):
-            forecast_lead_period.delay(forecast_day.isoformat(), forecast_days)
+            forecast_lead_period.delay(forecast_day.isoformat(), forecast_days, campaign)
         forecast_pending = result is None
         forecast_unavailable = result == {}
         forecast = forecast_chart(result or None)

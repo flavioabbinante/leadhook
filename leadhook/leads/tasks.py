@@ -119,12 +119,13 @@ def check_lead_drop() -> None:
 
 
 @shared_task
-def forecast_lead_period(first_day: str, days: int) -> None:
-    """Timestral's forecast of a period for the stats page; {} when Timestral is unavailable."""
+def forecast_lead_period(first_day: str, days: int, campaign: str | None = None) -> None:
+    """Timestral's forecast of a period (one campaign, or all with None) for the stats page;
+    {} when Timestral is unavailable."""
     day = date.fromisoformat(first_day)
-    key = period_cache_key(day, days)
+    key = period_cache_key(day, days, campaign)
     try:
-        result = forecast_period(day, days, timezone.now()) or {}
+        result = forecast_period(day, days, timezone.now(), campaign) or {}
         # A period that includes today grows every hour: recompute it soon.
         ongoing = day + timedelta(days=days) > timezone.localdate()
         cache.set(key, result, timeout=600 if ongoing else 6 * 3600)
