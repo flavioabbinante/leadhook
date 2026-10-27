@@ -2,10 +2,13 @@
 
 import csv
 import functools
+import hashlib
 import logging
-from datetime import UTC, date, datetime, timedelta
+import math
+from datetime import UTC, date, datetime, time, timedelta
 
 from django.contrib import admin
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, QuerySet
 from django.db.models.functions import Coalesce, TruncDate, TruncHour
@@ -30,9 +33,13 @@ ALL_CAMPAIGNS = "__all__"  # "" is a real filter value: leads without a campaign
 DROP_WINDOW = timedelta(hours=6)
 DROP_WEEKS = 4
 DROP_MIN_EXPECTED = 5  # below this the usual volume is too small to tell a drop from noise
-DROP_RATIO = 0.3  # without Timestral: alert under this share of the same-hours average
+DROP_RATIO = 0.3  # alert only under this share of the expected volume
 FORECAST_MODEL = "mistralai/Timestral-28M"
-FORECAST_LOW = 0.05  # with Timestral: alert under this quantile of the forecast
+FORECAST_LOW = 0.05  # with Timestral, also under this quantile: an unusual drop, not just a dip
+FORECAST_HIGH = 0.95  # top of the band drawn on the stats page
+FORECAST_CACHE_KEY = "lead_forecast"  # the last check's forecast, for the stats page chart
+FORECAST_CHART_HOURS = 48
+FORECAST_PERIODS = (1, 2, 3, 7, 14)  # days that can be reviewed at once: 14 take ~30 s on CPU
 
 
 def period_leads(days: int, today: date) -> QuerySet:
@@ -50,20 +57,28 @@ def _forecaster():
     return TimestralForecaster.from_pretrained(FORECAST_MODEL)
 
 
-def _forecast(history: list[int], steps: int) -> tuple[float, float] | None:
-    """(median, low) leads Timestral expects in the next `steps` hours, None if unavailable."""
+def _forecast(histories: list[list[int]], steps: int) -> list[tuple[list, list, list]] | None:
+    """For each history, the hourly (median, low, high) leads Timestral expects in the next
+    `steps` hours; None if unavailable. One batch: much faster than a call per history."""
     try:
         import numpy as np
 
-        forecast = _forecaster().forecast(np.array(history, dtype=float), prediction_length=steps)
+        forecast = _forecaster().forecast(np.array(histories, dtype=float), prediction_length=steps)
     except ImportError:
         return None
     except Exception:
         logger.exception("Timestral forecast failed, falling back to the plain average")
         return None
-    # shortcut: summing hourly quantiles gives a lower bound than the window's true quantile
-    # (fewer alerts); forecast 6-hour buckets instead if real drops go unnoticed.
-    return float(forecast.median.sum()), float(forecast.quantile(FORECAST_LOW).sum())
+    quantiles = forecast.median, forecast.quantile(FORECAST_LOW), forecast.quantile(FORECAST_HIGH)
+    return [
+        tuple([float(v) for v in values[i].flatten()] for values in quantiles)
+        for i in range(len(histories))
+    ]
+
+
+def _is_drop(actual: int, expected: float, low: float) -> bool:
+    # A very regular history gives a tight forecast: the ratio keeps small dips quiet.
+    return expected >= DROP_MIN_EXPECTED and actual < min(low, expected * DROP_RATIO)
 
 
 def hourly_counts(leads: QuerySet, start: datetime, hours: int) -> list[int]:
@@ -81,7 +96,8 @@ def hourly_counts(leads: QuerySet, start: datetime, hours: int) -> list[int]:
 def lead_drop(now: datetime) -> tuple[int, float] | None:
     """(received, expected) when the last DROP_WINDOW full hours got far fewer leads than
     expected, else None. Expected comes from Timestral fed the previous DROP_WEEKS weeks hour by
-    hour, or without it from the same hours of those weeks. Test leads (manual) don't count."""
+    hour (and the count must also be under its low quantile), or without it from the same hours
+    of those weeks. Test leads (manual) don't count."""
     window = int(DROP_WINDOW.total_seconds() // 3600)
     week = 7 * 24
     end = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
@@ -91,17 +107,126 @@ def lead_drop(now: datetime) -> tuple[int, float] | None:
     )
     history, actual = counts[:-window], sum(counts[-window:])
 
-    forecast = _forecast(history, window)
+    forecast = _forecast([history], window)
     if forecast is not None:
-        expected, low = forecast
-        drop = actual < low
+        median, low_hourly, high_hourly = forecast[0]
+        # shortcut: summing hourly quantiles gives a lower bound than the window's true quantile
+        # (fewer alerts); forecast 6-hour buckets instead if real drops go unnoticed.
+        expected, low = sum(median), sum(low_hourly)
+        snapshot = {"end": end, "counts": counts[-FORECAST_CHART_HOURS:], "median": median}
+        snapshot |= {"low": low_hourly, "high": high_hourly}
+        cache.set(FORECAST_CACHE_KEY, snapshot, timeout=3 * 3600)  # gone if checks stop
     else:
         same_hours = [counts[w * week : w * week + window] for w in range(DROP_WEEKS)]
         expected = sum(map(sum, same_hours)) / DROP_WEEKS
-        drop = actual < expected * DROP_RATIO
-    if expected >= DROP_MIN_EXPECTED and drop:
-        return actual, expected
-    return None
+        low = expected
+    return (actual, expected) if _is_drop(actual, expected, low) else None
+
+
+def period_cache_key(first_day: date, days: int, campaign: str | None = None) -> str:
+    # Campaign names are free text: hashed, they make a safe cache key.
+    scope = "all" if campaign is None else hashlib.sha256(campaign.encode()).hexdigest()[:16]
+    return f"lead_forecast:{first_day.isoformat()}:{days}:{scope}"
+
+
+def forecast_period(
+    first_day: date, days: int, now: datetime, campaign: str | None = None
+) -> dict | None:
+    """What Timestral expected in `days` local days from `first_day`, up to `now`, for one
+    campaign or all of them: hourly bands from a forecast per DROP_WINDOW block (made before the
+    block, from the DROP_WEEKS weeks behind it), and when the hourly check would have alerted.
+    None without Timestral or for a day still to come."""
+    window = int(DROP_WINDOW.total_seconds() // 3600)
+    context = DROP_WEEKS * 7 * 24
+    tz = timezone.get_current_timezone()
+    start = datetime.combine(first_day, time.min, tzinfo=tz).astimezone(UTC)
+    end = datetime.combine(first_day + timedelta(days=days), time.min, tzinfo=tz)
+    end = min(end.astimezone(UTC), now.astimezone(UTC).replace(minute=0, second=0, microsecond=0))
+    hours = int((end - start) / timedelta(hours=1))
+    if hours <= 0:
+        return None
+    leads = Lead.objects.exclude(source=Lead.Source.MANUAL)
+    if campaign is not None:
+        leads = leads.filter(campaign_name=campaign)
+    base = context + window - 1  # index of the period's first hour: checks look back that far
+    counts = hourly_counts(leads, start - timedelta(hours=base), base + hours)
+
+    # Blocks on the local clock (00, 06, 12, 18): the summer-time switch makes one 5 or 7 hours.
+    starts = [
+        datetime.combine(first_day + timedelta(days=d), time(h), tzinfo=tz).astimezone(UTC)
+        for d in range(days)
+        for h in range(0, 24, window)
+    ]
+    offsets = [b for b in (int((at - start) / timedelta(hours=1)) for at in starts) if b < hours]
+    bounds = list(zip(offsets, [*offsets[1:], hours], strict=True))
+    # Every hourly check whose window ends in the period: a drop across two blocks still shows.
+    checks = range(1 - window, hours - window + 1)
+    histories = [counts[base + b - context : base + b] for b in (*offsets, *checks)]
+    forecasts = _forecast(histories, max(window, *(e - b for b, e in bounds)))
+    if forecasts is None:
+        return None
+
+    snapshot = {"end": end, "counts": counts[base:], "median": [], "low": [], "high": []}
+    for (b, e), block in zip(bounds, forecasts[: len(bounds)], strict=True):
+        median, low, high = (values[: e - b] for values in block)  # today stops at this hour
+        snapshot["median"] += median
+        snapshot["low"] += low
+        snapshot["high"] += high
+    snapshot["alerts"] = []
+    for s, check in zip(checks, forecasts[len(bounds) :], strict=True):
+        median, low, _ = (values[:window] for values in check)
+        at = start + timedelta(hours=s + window)  # when the hourly check runs
+        muted = snapshot["alerts"] and at - snapshot["alerts"][-1] < timedelta(days=1)
+        if not muted and _is_drop(sum(counts[base + s : base + s + window]), sum(median), sum(low)):
+            snapshot["alerts"].append(at)  # then check_lead_drop stays quiet for a day
+    return snapshot
+
+
+def forecast_chart(snapshot: dict | None) -> dict | None:
+    """Hourly bars of a forecast snapshot (the last lead-drop check, or a reviewed period); the
+    forecast hours carry Timestral's band."""
+    if snapshot is None:
+        return None
+    counts, median, low, high = (snapshot[k] for k in ("counts", "median", "low", "high"))
+    window = len(median)
+    first = snapshot["end"] - timedelta(hours=len(counts))
+    peak = math.ceil(max(*counts, *high)) or 1
+
+    def height(value: float) -> str:
+        return f"{value * 100 / peak:.1f}"
+
+    dense = len(counts) > 72  # several days: one label a day, bars without gaps
+    points = []
+    for i, count in enumerate(counts):
+        hour = first + timedelta(hours=i)
+        local = timezone.localtime(hour)
+        point = {"hour": hour, "count": count, "height": height(count), "median": None}
+        if local.hour % (24 if dense else 6) == 0:
+            point["label"] = local.strftime("%d/%m" if dense else "%H:%M")
+        if (f := i - len(counts) + window) >= 0:
+            point |= {
+                "median": round(median[f], 1),
+                "low": round(low[f], 1),
+                "high": round(high[f], 1),
+                "band_bottom": height(low[f]),
+                "band_height": height(high[f] - low[f]),
+                "median_at": height(median[f]),
+                "below": count < low[f],
+            }
+        points.append(point)
+    return {
+        "points": points,
+        "dense": dense,
+        "alerts": snapshot.get("alerts"),  # only for a reviewed period
+        "end": snapshot["end"],
+        "window": window,
+        "actual": sum(counts[-window:]),
+        "expected": round(sum(median)),
+        "low": round(sum(low)),
+        "high": round(sum(high)),
+        "peak": peak,
+        "ticks": sorted({peak, peak // 2} - {0}, reverse=True),
+    }
 
 
 def daily_counts(leads: QuerySet, days: int, today: date) -> list[dict]:
@@ -156,6 +281,32 @@ def stats_view(request):
     if request.GET.get("format") == "csv":
         return export_csv(leads, days, today)
 
+    forecast_days = request.GET.get("forecast_days")
+    forecast_days = int(forecast_days) if forecast_days in map(str, FORECAST_PERIODS) else 1
+    try:
+        forecast_day = date.fromisoformat(request.GET.get("forecast_day", ""))
+    except ValueError:
+        forecast_day = None
+    if forecast_day is not None and forecast_day > today:
+        forecast_day = None
+    if forecast_day is None and campaign is not None:
+        # The hourly check covers all campaigns: for one campaign, review yesterday and today.
+        forecast_day, forecast_days = today - timedelta(days=1), 2
+    forecast_pending = forecast_unavailable = False
+    if forecast_day is None:
+        forecast = forecast_chart(cache.get(FORECAST_CACHE_KEY))
+    else:
+        from .tasks import forecast_lead_period  # tasks imports this module
+
+        key = period_cache_key(forecast_day, forecast_days, campaign)
+        result = cache.get(key)
+        # Up to ~30 s of CPU: the worker computes it, the card refreshes until it's there.
+        if result is None and cache.add(f"{key}:pending", 1, timeout=600):
+            forecast_lead_period.delay(forecast_day.isoformat(), forecast_days, campaign)
+        forecast_pending = result is None
+        forecast_unavailable = result == {}
+        forecast = forecast_chart(result or None)
+
     series = daily_counts(leads, days, today)
     total = sum(point["count"] for point in series)
     best = max(series, key=lambda point: point["count"])
@@ -180,5 +331,12 @@ def stats_view(request):
         "breakdowns": [
             (label, field, breakdown(leads, field, total)) for field, label in BREAKDOWNS
         ],
+        "forecast": forecast,
+        "forecast_day": forecast_day,
+        "forecast_days": forecast_days,
+        "forecast_periods": FORECAST_PERIODS,
+        "forecast_pending": forecast_pending,
+        "forecast_unavailable": forecast_unavailable,
+        "today": today,
     }
     return TemplateResponse(request, "admin/leadhook_stats.html", context)
