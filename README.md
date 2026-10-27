@@ -142,6 +142,7 @@ Errori di rete, timeout, 5xx, 408 e 429 vengono ritentati dopo 1 min, 5 min, 30 
 
 ## 📊 Monitoraggio
 
+- **Statistiche:** lead al giorno, per campagna, gruppo, inserzione e form, e il grafico "Cosa dice Timestral": i lead delle ultime 48 ore e, sulle 6 ore dell'ultimo controllo, la previsione con mediana e banda 5–95%.
 - **Dashboard** (home dell'admin): lead di oggi e per form, consegne fallite, lead non instradati, stato delle pagine, stato dei job in background.
 - **Avvisi via email** a `ALERT_EMAILS`: consegna fallita definitivamente, lead non instradato, problema con il token o l'iscrizione di una pagina, lead che non è stato possibile recuperare, silenzio insolito, lead in forte calo (sotto il 30%) rispetto a quanti ne prevede [Timestral 28M](https://huggingface.co/mistralai/Timestral-28M) di Mistral dalle 4 settimane precedenti (senza l'extra `forecast`, rispetto alla media delle stesse ore di quelle settimane). Al massimo una email per tipo ogni 15 minuti.
 - **`GET /health/`** restituisce 200 con `{"database": "ok", "redis": "ok", "beat": "ok"}`, oppure 503 indicando cosa non va. `beat` diventa `stale` quando i job in background non girano da 5 minuti. L'endpoint è escluso dal redirect HTTPS; l'header `Host` deve comunque essere in `ALLOWED_HOSTS`.
