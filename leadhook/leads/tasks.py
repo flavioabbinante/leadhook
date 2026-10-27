@@ -111,7 +111,7 @@ def check_lead_drop() -> None:
     send_alert(
         AlertKind.LEAD_DROP,
         "Lead in calo",
-        f"Nelle ultime {hours} ore sono arrivati {received} lead; nelle stesse ore delle "
-        f"settimane precedenti in media {expected:.0f}.\n"
+        f"Nelle ultime {hours} ore sono arrivati {received} lead; in base alle settimane "
+        f"precedenti ne erano attesi circa {expected:.0f}.\n"
         "Controlla campagne, form e collegamento con Meta.",
     )
