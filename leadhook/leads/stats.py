@@ -30,9 +30,9 @@ ALL_CAMPAIGNS = "__all__"  # "" is a real filter value: leads without a campaign
 DROP_WINDOW = timedelta(hours=6)
 DROP_WEEKS = 4
 DROP_MIN_EXPECTED = 5  # below this the usual volume is too small to tell a drop from noise
-DROP_RATIO = 0.3  # without Timestral: alert under this share of the same-hours average
+DROP_RATIO = 0.3  # alert only under this share of the expected volume
 FORECAST_MODEL = "mistralai/Timestral-28M"
-FORECAST_LOW = 0.05  # with Timestral: alert under this quantile of the forecast
+FORECAST_LOW = 0.05  # with Timestral, also under this quantile: an unusual drop, not just a dip
 
 
 def period_leads(days: int, today: date) -> QuerySet:
@@ -81,7 +81,8 @@ def hourly_counts(leads: QuerySet, start: datetime, hours: int) -> list[int]:
 def lead_drop(now: datetime) -> tuple[int, float] | None:
     """(received, expected) when the last DROP_WINDOW full hours got far fewer leads than
     expected, else None. Expected comes from Timestral fed the previous DROP_WEEKS weeks hour by
-    hour, or without it from the same hours of those weeks. Test leads (manual) don't count."""
+    hour (and the count must also be under its low quantile), or without it from the same hours
+    of those weeks. Test leads (manual) don't count."""
     window = int(DROP_WINDOW.total_seconds() // 3600)
     week = 7 * 24
     end = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
@@ -93,13 +94,13 @@ def lead_drop(now: datetime) -> tuple[int, float] | None:
 
     forecast = _forecast(history, window)
     if forecast is not None:
+        # A very regular history gives a tight forecast: the ratio keeps small dips quiet.
         expected, low = forecast
-        drop = actual < low
     else:
         same_hours = [counts[w * week : w * week + window] for w in range(DROP_WEEKS)]
         expected = sum(map(sum, same_hours)) / DROP_WEEKS
-        drop = actual < expected * DROP_RATIO
-    if expected >= DROP_MIN_EXPECTED and drop:
+        low = expected
+    if expected >= DROP_MIN_EXPECTED and actual < min(low, expected * DROP_RATIO):
         return actual, expected
     return None
 
