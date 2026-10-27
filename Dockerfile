@@ -14,7 +14,13 @@ RUN useradd --system --create-home --uid 1000 leadhook
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra forecast --no-cache
+
+# Timestral weights baked into the image: the worker never downloads them at runtime.
+ENV HF_HOME=/opt/huggingface
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('mistralai/Timestral-28M')" \
+    && chmod -R a+rX /opt/huggingface
+ENV HF_HUB_OFFLINE=1
 
 # Code and collected static files stay owned by root: the runtime user can read but not modify them.
 COPY . .

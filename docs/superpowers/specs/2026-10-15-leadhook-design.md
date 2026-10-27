@@ -135,6 +135,7 @@ Lead states: `received` → `fetched` → `routed` | `unrouted` → `delivered` 
 | `sync_forms` | 1 h | Refresh each page's form list |
 | `check_pages` | 1 day | Validate token (`debug_token`) and `subscribed_apps` subscription; resubscribe if missing; flag errors |
 | `check_silence` | 1 h | Alert if a page that usually receives leads has had none for `SILENCE_ALERT_HOURS` (default 24) |
+| `check_lead_drop` | 1 h | Alert (at most once a day) if the last 6 full hours got fewer leads than the 5% quantile Timestral 28M forecasts from the previous 4 weeks hour by hour (without the `forecast` extra: under 30% of the same-hours average), when the expected volume is at least 5 |
 | `purge_old_data` | 1 day | Retention |
 | `heartbeat` | 1 min | Update the timestamp checked by `/health/` |
 

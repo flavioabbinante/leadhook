@@ -18,13 +18,27 @@ dependencies = [
     "segno>=1.6.6",
 ]
 
+[project.optional-dependencies]
+# Timestral forecasts the expected lead volume for check_lead_drop; without it the plain average is used.
+forecast = ["timestral", "torch>=2.4"]
+
 [dependency-groups]
 dev = [
+    "numpy>=1.24",  # Timestral tests run with a fake model, without torch
     "pytest>=8",
     "pytest-django>=4.9",
     "responses>=0.25",
     "ruff>=0.6",
 ]
+
+[tool.uv.sources]
+timestral = { url = "https://github.com/mistralai/timestral/archive/a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff.tar.gz" }
+torch = { index = "pytorch-cpu" }  # CPU-only wheels: CUDA would add gigabytes
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
