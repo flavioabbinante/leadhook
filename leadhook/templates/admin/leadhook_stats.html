@@ -64,6 +64,53 @@
     {% endif %}
   </section>
 
+  <section class="lh-card lh-forecast">
+    <h2 class="lh-card-title">Cosa dice Timestral</h2>
+    {% if forecast %}
+      <p class="lh-card-subtitle">
+        Tutte le campagne · controllo di {{ forecast.end|date:"D j M, H:i" }} ·
+        ultime {{ forecast.window }} ore: <strong>{{ forecast.actual }} lead</strong>, previsti {{ forecast.expected }} (di solito tra {{ forecast.low }} e {{ forecast.high }})
+      </p>
+      <div class="lh-chart" role="img" aria-label="Lead all'ora nelle ultime {{ forecast.points|length }} ore e previsione di Timestral per le ultime {{ forecast.window }}">
+        <div class="lh-chart-plot">
+          {% for tick in forecast.ticks %}
+            <div class="lh-chart-grid" style="bottom: {% widthratio tick forecast.peak 100 %}%"><span>{{ tick }}</span></div>
+          {% endfor %}
+          <div class="lh-chart-bars">
+            {% for point in forecast.points %}
+              <div class="lh-chart-col" tabindex="0" aria-label="{{ point.hour|date:'D H:i' }}: {{ point.count }} lead{% if point.median is not None %}, previsti {{ point.median }}{% endif %}">
+                <span class="lh-chart-bar{% if not point.count %} is-zero{% endif %}{% if point.below %} is-below{% endif %}" style="height: {{ point.height }}%"></span>
+                {% if point.median is not None %}
+                  <span class="lh-forecast-band" style="bottom: {{ point.band_bottom }}%; height: {{ point.band_height }}%"></span>
+                  <span class="lh-forecast-median" style="bottom: {{ point.median_at }}%"></span>
+                {% endif %}
+                <span class="lh-chart-tip"><strong>{{ point.count }} lead</strong>{{ point.hour|date:"D H:i" }}{% if point.median is not None %}<span>Timestral: {{ point.median }} ({{ point.low }}–{{ point.high }})</span>{% endif %}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="lh-chart-axis">
+          {% for point in forecast.points %}<span>{% if forloop.revcounter0|divisibleby:12 %}{{ point.hour|date:"H:i" }}{% endif %}</span>{% endfor %}
+        </div>
+      </div>
+      <ul class="lh-forecast-legend">
+        <li><span class="lh-forecast-swatch"></span>Lead arrivati</li>
+        <li><span class="lh-forecast-swatch is-band"></span>Previsione, 5–95%</li>
+        <li><span class="lh-forecast-swatch is-median"></span>Previsione, mediana</li>
+        <li><span class="lh-forecast-swatch is-below"></span>Sotto il minimo previsto</li>
+      </ul>
+      <details class="lh-details">
+        <summary>Mostra la previsione come tabella</summary>
+        <table class="lh-table">
+          <thead><tr><th scope="col">Ora</th><th scope="col" class="lh-num">Lead</th><th scope="col" class="lh-num">Previsti</th><th scope="col" class="lh-num">Minimo (5%)</th><th scope="col" class="lh-num">Massimo (95%)</th></tr></thead>
+          <tbody>{% for point in forecast.points reversed %}{% if point.median is not None %}<tr><td>{{ point.hour|date:"D d/m H:i" }}</td><td class="lh-num">{{ point.count }}</td><td class="lh-num">{{ point.median }}</td><td class="lh-num">{{ point.low }}</td><td class="lh-num">{{ point.high }}</td></tr>{% endif %}{% endfor %}</tbody>
+        </table>
+      </details>
+    {% else %}
+      <p class="lh-empty">Nessuna previsione nelle ultime 3 ore. Timestral confronta ogni ora i lead delle ultime 6 ore con quelli che si aspettava; serve l'immagine Docker, che include il modello.</p>
+    {% endif %}
+  </section>
+
   <div class="lh-stats-grid">
     {% for label, field, rows in breakdowns %}
       <section class="lh-card lh-card-flush">

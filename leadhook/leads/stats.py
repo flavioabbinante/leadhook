@@ -3,9 +3,11 @@
 import csv
 import functools
 import logging
+import math
 from datetime import UTC, date, datetime, timedelta
 
 from django.contrib import admin
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, QuerySet
 from django.db.models.functions import Coalesce, TruncDate, TruncHour
@@ -33,6 +35,9 @@ DROP_MIN_EXPECTED = 5  # below this the usual volume is too small to tell a drop
 DROP_RATIO = 0.3  # alert only under this share of the expected volume
 FORECAST_MODEL = "mistralai/Timestral-28M"
 FORECAST_LOW = 0.05  # with Timestral, also under this quantile: an unusual drop, not just a dip
+FORECAST_HIGH = 0.95  # top of the band drawn on the stats page
+FORECAST_CACHE_KEY = "lead_forecast"  # the last check's forecast, for the stats page chart
+FORECAST_CHART_HOURS = 48
 
 
 def period_leads(days: int, today: date) -> QuerySet:
@@ -50,8 +55,9 @@ def _forecaster():
     return TimestralForecaster.from_pretrained(FORECAST_MODEL)
 
 
-def _forecast(history: list[int], steps: int) -> tuple[float, float] | None:
-    """(median, low) leads Timestral expects in the next `steps` hours, None if unavailable."""
+def _forecast(history: list[int], steps: int) -> tuple[list, list, list] | None:
+    """Hourly (median, low, high) leads Timestral expects in the next `steps` hours, None if
+    unavailable."""
     try:
         import numpy as np
 
@@ -61,9 +67,14 @@ def _forecast(history: list[int], steps: int) -> tuple[float, float] | None:
     except Exception:
         logger.exception("Timestral forecast failed, falling back to the plain average")
         return None
-    # shortcut: summing hourly quantiles gives a lower bound than the window's true quantile
-    # (fewer alerts); forecast 6-hour buckets instead if real drops go unnoticed.
-    return float(forecast.median.sum()), float(forecast.quantile(FORECAST_LOW).sum())
+    return tuple(
+        [float(v) for v in values.flatten()]
+        for values in (
+            forecast.median,
+            forecast.quantile(FORECAST_LOW),
+            forecast.quantile(FORECAST_HIGH),
+        )
+    )
 
 
 def hourly_counts(leads: QuerySet, start: datetime, hours: int) -> list[int]:
@@ -94,8 +105,14 @@ def lead_drop(now: datetime) -> tuple[int, float] | None:
 
     forecast = _forecast(history, window)
     if forecast is not None:
+        median, low_hourly, high_hourly = forecast
+        # shortcut: summing hourly quantiles gives a lower bound than the window's true quantile
+        # (fewer alerts); forecast 6-hour buckets instead if real drops go unnoticed.
         # A very regular history gives a tight forecast: the ratio keeps small dips quiet.
-        expected, low = forecast
+        expected, low = sum(median), sum(low_hourly)
+        snapshot = {"end": end, "counts": counts[-FORECAST_CHART_HOURS:], "median": median}
+        snapshot |= {"low": low_hourly, "high": high_hourly}
+        cache.set(FORECAST_CACHE_KEY, snapshot, timeout=3 * 3600)  # gone if checks stop
     else:
         same_hours = [counts[w * week : w * week + window] for w in range(DROP_WEEKS)]
         expected = sum(map(sum, same_hours)) / DROP_WEEKS
@@ -103,6 +120,46 @@ def lead_drop(now: datetime) -> tuple[int, float] | None:
     if expected >= DROP_MIN_EXPECTED and actual < min(low, expected * DROP_RATIO):
         return actual, expected
     return None
+
+
+def forecast_chart(snapshot: dict | None) -> dict | None:
+    """Hourly bars of the last lead-drop check; the checked hours carry Timestral's band."""
+    if snapshot is None:
+        return None
+    counts, median, low, high = (snapshot[k] for k in ("counts", "median", "low", "high"))
+    window = len(median)
+    first = snapshot["end"] - timedelta(hours=len(counts))
+    peak = math.ceil(max(*counts, *high)) or 1
+
+    def height(value: float) -> str:
+        return f"{value * 100 / peak:.1f}"
+
+    points = []
+    for i, count in enumerate(counts):
+        point = {"hour": first + timedelta(hours=i), "count": count, "height": height(count)}
+        point["median"] = None
+        if (f := i - len(counts) + window) >= 0:
+            point |= {
+                "median": round(median[f], 1),
+                "low": round(low[f], 1),
+                "high": round(high[f], 1),
+                "band_bottom": height(low[f]),
+                "band_height": height(high[f] - low[f]),
+                "median_at": height(median[f]),
+                "below": count < low[f],
+            }
+        points.append(point)
+    return {
+        "points": points,
+        "end": snapshot["end"],
+        "window": window,
+        "actual": sum(counts[-window:]),
+        "expected": round(sum(median)),
+        "low": round(sum(low)),
+        "high": round(sum(high)),
+        "peak": peak,
+        "ticks": sorted({peak, peak // 2} - {0}, reverse=True),
+    }
 
 
 def daily_counts(leads: QuerySet, days: int, today: date) -> list[dict]:
@@ -181,5 +238,6 @@ def stats_view(request):
         "breakdowns": [
             (label, field, breakdown(leads, field, total)) for field, label in BREAKDOWNS
         ],
+        "forecast": forecast_chart(cache.get(FORECAST_CACHE_KEY)),
     }
     return TemplateResponse(request, "admin/leadhook_stats.html", context)

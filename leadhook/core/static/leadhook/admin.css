@@ -937,6 +937,17 @@ html[data-theme="dark"] { --lh-chart: #6366f1; --lh-tip-bg: #2e3036; --lh-tip-li
 .lh-chart-axis { display: flex; gap: 2px; margin: 6px 0 0 32px; }
 .lh-chart-axis span { flex: 1; overflow: visible; white-space: nowrap; font-size: 11px; color: var(--lh-muted); text-align: center; }
 .lh-chart-fill { background: var(--lh-chart); }
+.lh-forecast { margin-top: 20px; }
+.lh-forecast-band, .lh-forecast-median { position: absolute; left: 0; right: 0; max-width: 24px; margin: 0 auto; pointer-events: none; }
+.lh-forecast-band { border: 1px dashed var(--lh-chart); border-radius: 4px; background: color-mix(in srgb, var(--lh-chart) 24%, transparent); }
+.lh-forecast-median { border-top: 2px solid var(--body-loud-color); }
+.lh-chart-bar.is-below { background: var(--lh-red); }
+.lh-forecast-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 14px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--lh-muted); }
+.lh-forecast-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.lh-forecast-swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--lh-chart); }
+.lh-forecast-swatch.is-band { border: 1px dashed var(--lh-chart); background: color-mix(in srgb, var(--lh-chart) 24%, transparent); }
+.lh-forecast-swatch.is-median { height: 0; border-radius: 0; border-top: 2px solid var(--body-loud-color); background: none; }
+.lh-forecast-swatch.is-below { background: var(--lh-red); }
 .lh-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
 .lh-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (max-width: 1023px) {

@@ -1,11 +1,12 @@
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 
 from leadhook.leads.models import Lead
-from leadhook.leads.stats import daily_counts, period_leads
+from leadhook.leads.stats import FORECAST_CACHE_KEY, daily_counts, period_leads
 from tests.factories import make_lead
 
 URL = reverse("stats")
@@ -55,3 +56,19 @@ def test_stats_page_filters_by_campaign_and_exports_csv(admin_client):
 def test_stats_needs_lead_permission(client):
     client.force_login(User.objects.create_user("staff", password="pw", is_staff=True))
     assert client.get(URL).status_code == 403
+
+
+def test_stats_page_draws_the_last_timestral_forecast(admin_client):
+    assert "Nessuna previsione" in admin_client.get(URL).content.decode()
+
+    end = timezone.now().replace(minute=0, second=0, microsecond=0)
+    counts = [4] * 42 + [5, 1, 0, 0, 1, 0]
+    cache.set(
+        FORECAST_CACHE_KEY,
+        {"end": end, "counts": counts, "median": [6.0] * 6, "low": [2.0] * 6, "high": [10.0] * 6},
+    )
+    content = admin_client.get(URL).content.decode()
+    assert "<strong>7 lead</strong>, previsti 36 (di solito tra 12 e 60)" in content
+    assert content.count('class="lh-forecast-band"') == 6
+    assert content.count("is-below") == 5 + 1  # five hours under the minimum, plus the legend
+    assert "Timestral: 6,0 (2,0–10,0)" in content
