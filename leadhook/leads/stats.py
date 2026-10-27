@@ -1,17 +1,21 @@
 """Campaign statistics: leads per day and per campaign, ad set, ad and form."""
 
 import csv
-from datetime import date, timedelta
+import functools
+import logging
+from datetime import UTC, date, datetime, timedelta
 
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, QuerySet
-from django.db.models.functions import Coalesce, TruncDate
+from django.db.models.functions import Coalesce, TruncDate, TruncHour
 from django.http import HttpResponse
 from django.template.response import TemplateResponse
 from django.utils import timezone
 
 from .models import Lead
+
+logger = logging.getLogger(__name__)
 
 PERIODS = (7, 30, 90)
 BREAKDOWNS = (
@@ -23,6 +27,13 @@ BREAKDOWNS = (
 NO_NAME = "Senza nome (organico o non disponibile)"
 ALL_CAMPAIGNS = "__all__"  # "" is a real filter value: leads without a campaign name
 
+DROP_WINDOW = timedelta(hours=6)
+DROP_WEEKS = 4
+DROP_MIN_EXPECTED = 5  # below this the usual volume is too small to tell a drop from noise
+DROP_RATIO = 0.3  # without Timestral: alert under this share of the same-hours average
+FORECAST_MODEL = "mistralai/Timestral-28M"
+FORECAST_LOW = 0.05  # with Timestral: alert under this quantile of the forecast
+
 
 def period_leads(days: int, today: date) -> QuerySet:
     """Leads of the last `days` local days, annotated with the local day they were sent."""
@@ -30,6 +41,67 @@ def period_leads(days: int, today: date) -> QuerySet:
     sent = Coalesce("created_time", "received_at")
     day = TruncDate(sent, tzinfo=timezone.get_current_timezone())
     return Lead.objects.annotate(day=day).filter(day__gte=start, day__lte=today)
+
+
+@functools.cache
+def _forecaster():
+    from timestral import TimestralForecaster  # optional extra "forecast": torch is heavy
+
+    return TimestralForecaster.from_pretrained(FORECAST_MODEL)
+
+
+def _forecast(history: list[int], steps: int) -> tuple[float, float] | None:
+    """(median, low) leads Timestral expects in the next `steps` hours, None if unavailable."""
+    try:
+        import numpy as np
+
+        forecast = _forecaster().forecast(np.array(history, dtype=float), prediction_length=steps)
+    except ImportError:
+        return None
+    except Exception:
+        logger.exception("Timestral forecast failed, falling back to the plain average")
+        return None
+    # shortcut: summing hourly quantiles gives a lower bound than the window's true quantile
+    # (fewer alerts); forecast 6-hour buckets instead if real drops go unnoticed.
+    return float(forecast.median.sum()), float(forecast.quantile(FORECAST_LOW).sum())
+
+
+def hourly_counts(leads: QuerySet, start: datetime, hours: int) -> list[int]:
+    """Leads per hour from `start` (on the hour), zero-filled."""
+    by_hour = dict(
+        leads.filter(received_at__gte=start, received_at__lt=start + timedelta(hours=hours))
+        .annotate(hour=TruncHour("received_at", tzinfo=UTC))
+        .values_list("hour")
+        .annotate(n=Count("pk"))
+        .order_by()
+    )
+    return [by_hour.get(start + timedelta(hours=h), 0) for h in range(hours)]
+
+
+def lead_drop(now: datetime) -> tuple[int, float] | None:
+    """(received, expected) when the last DROP_WINDOW full hours got far fewer leads than
+    expected, else None. Expected comes from Timestral fed the previous DROP_WEEKS weeks hour by
+    hour, or without it from the same hours of those weeks. Test leads (manual) don't count."""
+    window = int(DROP_WINDOW.total_seconds() // 3600)
+    week = 7 * 24
+    end = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    start = end - DROP_WINDOW - timedelta(weeks=DROP_WEEKS)
+    counts = hourly_counts(
+        Lead.objects.exclude(source=Lead.Source.MANUAL), start, DROP_WEEKS * week + window
+    )
+    history, actual = counts[:-window], sum(counts[-window:])
+
+    forecast = _forecast(history, window)
+    if forecast is not None:
+        expected, low = forecast
+        drop = actual < low
+    else:
+        same_hours = [counts[w * week : w * week + window] for w in range(DROP_WEEKS)]
+        expected = sum(map(sum, same_hours)) / DROP_WEEKS
+        drop = actual < expected * DROP_RATIO
+    if expected >= DROP_MIN_EXPECTED and drop:
+        return actual, expected
+    return None
 
 
 def daily_counts(leads: QuerySet, days: int, today: date) -> list[dict]:

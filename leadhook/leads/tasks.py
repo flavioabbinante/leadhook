@@ -1,6 +1,7 @@
 import logging
 
 from celery import shared_task
+from django.core.cache import cache
 from django.utils import timezone
 
 from leadhook.core.alerts import AlertKind, send_alert
@@ -18,6 +19,7 @@ from .services import (
     ingest_lead,
     reconcile_form,
 )
+from .stats import DROP_WINDOW, lead_drop
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +98,20 @@ def reconcile_leads() -> None:
 @shared_task
 def purge_old_data() -> None:
     logger.info("Retention purge: %s", purge_expired_data(now=timezone.now()))
+
+
+@shared_task
+def check_lead_drop() -> None:
+    drop = lead_drop(timezone.now())
+    # One email a day per drop: send_alert's 15-minute pause would repeat it every hour.
+    if drop is None or not cache.add("lead_drop_alerted", 1, timeout=86400):
+        return
+    received, expected = drop
+    hours = int(DROP_WINDOW.total_seconds() // 3600)
+    send_alert(
+        AlertKind.LEAD_DROP,
+        "Lead in calo",
+        f"Nelle ultime {hours} ore sono arrivati {received} lead; in base alle settimane "
+        f"precedenti ne erano attesi circa {expected:.0f}.\n"
+        "Controlla campagne, form e collegamento con Meta.",
+    )

@@ -23,6 +23,7 @@ class AlertKind(StrEnum):
     PAGE_ERROR = "page_error"
     FETCH_FAILED = "fetch_failed"
     SILENCE = "silence"
+    LEAD_DROP = "lead_drop"
 
 
 def send_alert(kind: AlertKind, subject: str, body: str) -> bool:
