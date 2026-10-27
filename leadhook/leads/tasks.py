@@ -1,4 +1,5 @@
 import logging
+from datetime import date, timedelta
 
 from celery import shared_task
 from django.core.cache import cache
@@ -19,7 +20,7 @@ from .services import (
     ingest_lead,
     reconcile_form,
 )
-from .stats import DROP_WINDOW, lead_drop
+from .stats import DROP_WINDOW, forecast_period, lead_drop, period_cache_key
 
 logger = logging.getLogger(__name__)
 
@@ -115,3 +116,17 @@ def check_lead_drop() -> None:
         f"precedenti ne erano attesi circa {expected:.0f}.\n"
         "Controlla campagne, form e collegamento con Meta.",
     )
+
+
+@shared_task
+def forecast_lead_period(first_day: str, days: int) -> None:
+    """Timestral's forecast of a period for the stats page; {} when Timestral is unavailable."""
+    day = date.fromisoformat(first_day)
+    key = period_cache_key(day, days)
+    try:
+        result = forecast_period(day, days, timezone.now()) or {}
+        # A period that includes today grows every hour: recompute it soon.
+        ongoing = day + timedelta(days=days) > timezone.localdate()
+        cache.set(key, result, timeout=600 if ongoing else 6 * 3600)
+    finally:
+        cache.delete(f"{key}:pending")

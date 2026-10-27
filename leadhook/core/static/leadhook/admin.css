@@ -942,6 +942,10 @@ html[data-theme="dark"] { --lh-chart: #6366f1; --lh-tip-bg: #2e3036; --lh-tip-li
 .lh-forecast-band { border: 1px dashed var(--lh-chart); border-radius: 4px; background: color-mix(in srgb, var(--lh-chart) 24%, transparent); }
 .lh-forecast-median { border-top: 2px solid var(--body-loud-color); }
 .lh-chart-bar.is-below { background: var(--lh-red); }
+.lh-chart-bars.is-dense, .lh-chart-axis.is-dense { gap: 0; }
+.lh-chart-bars.is-dense .lh-chart-bar { border-radius: 1px 1px 0 0; }
+.lh-forecast-filters { margin: 0; }
+.lh-forecast-filters input[type="date"] { font: inherit; }
 .lh-forecast-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 14px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--lh-muted); }
 .lh-forecast-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .lh-forecast-swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--lh-chart); }
