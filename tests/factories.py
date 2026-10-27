@@ -1,6 +1,9 @@
 """Small helpers that create valid model instances with overridable defaults."""
 
 from datetime import UTC, datetime
+from unittest import mock
+
+import numpy as np
 
 from leadhook.core.models import get_default_workspace
 from leadhook.destinations.models import Destination
@@ -76,3 +79,18 @@ def make_destination(**kwargs) -> Destination:
     }
     values.update(kwargs)
     return Destination.objects.create(**values)
+
+
+def fake_forecaster(median: float, low: float, high: float | None = None) -> mock.Mock:
+    """A Timestral stand-in: every series gets `median`/`low`/`high` spread over the horizon."""
+
+    def forecast(context, prediction_length):
+        shape = (len(context), 1, prediction_length)
+
+        def spread(total):
+            return np.full(shape, total / prediction_length)
+
+        quantiles = {0.05: spread(low), 0.95: spread(median * 2 if high is None else high)}
+        return mock.Mock(median=spread(median), quantile=quantiles.__getitem__)
+
+    return mock.Mock(forecast=mock.Mock(side_effect=forecast))
