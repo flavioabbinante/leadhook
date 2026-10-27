@@ -129,7 +129,7 @@ def test_stats_page_reviews_a_chosen_period_in_the_background(admin_client):
         content = admin_client.get(URL, params).content.decode()
         admin_client.get(URL, params)  # still computing: not queued twice
     delay.assert_called_once_with(day.isoformat(), 2)
-    assert "Timestral sta calcolando 2 giorni" in content and 'http-equiv="refresh"' in content
+    assert "Timestral sta calcolando 2 giorni" in content and 'data-pending="1"' in content
 
     with mock.patch("leadhook.leads.stats._forecaster", return_value=fake_forecaster(60, 30)):
         forecast_lead_period(day.isoformat(), 2)

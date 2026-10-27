@@ -1,5 +1,6 @@
 {% extends "admin/base_site.html" %}
-{% block extrahead %}{{ block.super }}{% if forecast_pending %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
+{% load static %}
+{% block extrahead %}{{ block.super }}<script src="{% static 'leadhook/stats_forecast.js' %}" defer></script>{% if forecast_pending %}<noscript><meta http-equiv="refresh" content="4; url=?{{ request.GET.urlencode }}"></noscript>{% endif %}{% endblock %}
 {% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Pagina iniziale</a> › Statistiche</div>{% endblock %}
 {% block content %}
 <div id="content-main">
@@ -65,7 +66,7 @@
     {% endif %}
   </section>
 
-  <section class="lh-card lh-forecast" id="timestral">
+  <section class="lh-card lh-forecast" id="timestral" aria-live="polite"{% if forecast_pending %} data-pending="1"{% endif %}>
     <div class="lh-card-head-row">
       <h2 class="lh-card-title">Cosa dice Timestral</h2>
       <form method="get" action="#timestral" class="lh-stats-filters lh-forecast-filters">
@@ -83,7 +84,7 @@
       </form>
     </div>
     {% if forecast_pending %}
-      <p class="lh-empty" role="status">Timestral sta calcolando {{ forecast_days }} giorn{{ forecast_days|pluralize:"o,i" }} dal {{ forecast_day|date:"D j M" }}: ci vuole fino a mezzo minuto, la pagina si aggiorna da sola.</p>
+      <p class="lh-empty">Timestral sta calcolando {{ forecast_days }} giorn{{ forecast_days|pluralize:"o,i" }} dal {{ forecast_day|date:"D j M" }}<span data-elapsed></span>: ci vuole fino a mezzo minuto, il riquadro si aggiorna da solo.</p>
     {% elif forecast_unavailable %}
       <p class="lh-empty">Timestral non è disponibile in questa installazione: serve l'immagine Docker, che include il modello.</p>
     {% elif forecast %}
