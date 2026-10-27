@@ -199,11 +199,13 @@ def test_lead_drop_ignores_normal_and_low_volume(no_forecast):
 def test_lead_drop_uses_timestral_forecast():
     now = timezone.now()
     _leads_at(now - timedelta(weeks=1, hours=1), 3, start=100)
-    _leads_at(now - timedelta(hours=1), 6)
+    _leads_at(now - timedelta(hours=1), 4)
     with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
         forecaster.return_value = _fake_forecaster(median=20, low=8)
-        assert lead_drop(now) == (6, 20)
+        assert lead_drop(now) == (4, 20)
         history = forecaster.return_value.forecast.call_args.args[0]
         assert len(history) == 4 * 7 * 24 and history.sum() == 3
-        forecaster.return_value = _fake_forecaster(median=20, low=5)
-        assert lead_drop(now) is None  # 6 leads are within the forecast range
+        forecaster.return_value = _fake_forecaster(median=20, low=3)
+        assert lead_drop(now) is None  # 4 leads are within the forecast range
+        forecaster.return_value = _fake_forecaster(median=5, low=5)
+        assert lead_drop(now) is None  # under a tight forecast, but not a 70% drop
