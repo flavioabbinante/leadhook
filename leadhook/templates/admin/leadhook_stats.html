@@ -1,4 +1,6 @@
 {% extends "admin/base_site.html" %}
+{% load static %}
+{% block extrahead %}{{ block.super }}<script src="{% static 'leadhook/stats_forecast.js' %}" defer></script>{% if forecast_pending %}<noscript><meta http-equiv="refresh" content="4; url=?{{ request.GET.urlencode }}"></noscript>{% endif %}{% endblock %}
 {% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Pagina iniziale</a> › Statistiche</div>{% endblock %}
 {% block content %}
 <div id="content-main">
@@ -61,6 +63,85 @@
       </details>
     {% else %}
       <p class="lh-empty">Nessun lead in questo periodo.</p>
+    {% endif %}
+  </section>
+
+  <section class="lh-card lh-forecast" id="timestral" aria-live="polite"{% if forecast_pending %} data-pending="1"{% endif %}>
+    <div class="lh-card-head-row">
+      <h2 class="lh-card-title">Cosa dice Timestral</h2>
+      <form method="get" action="#timestral" class="lh-stats-filters lh-forecast-filters">
+        <input type="hidden" name="days" value="{{ days }}">
+        <label class="lh-stats-select">
+          <span>Campagna</span>
+          <select name="campaign">
+            <option value="{{ all_campaigns }}"{% if campaign is None %} selected{% endif %}>Tutte</option>
+            {% for row in campaigns %}<option value="{{ row.value }}"{% if campaign == row.value %} selected{% endif %}>{{ row.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="lh-stats-select"><span>Dal</span><input type="date" name="forecast_day" value="{{ forecast_day|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required></label>
+        <label class="lh-stats-select">
+          <span>Giorni</span>
+          <select name="forecast_days">
+            {% for period in forecast_periods %}<option value="{{ period }}"{% if period == forecast_days %} selected{% endif %}>{{ period }}</option>{% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="lh-btn lh-btn-dark">Mostra</button>
+        {% if forecast_day %}<a class="lh-btn lh-btn-outline" href="?days={{ days }}#timestral" title="L'ultimo controllo orario, su tutte le campagne">Ultimo controllo</a>{% endif %}
+      </form>
+    </div>
+    {% if forecast_pending %}
+      <p class="lh-empty">Timestral sta calcolando {% if campaign is not None %}la campagna {{ campaign|default:"senza nome" }}, {% endif %}{{ forecast_days }} giorn{{ forecast_days|pluralize:"o,i" }} dal {{ forecast_day|date:"D j M" }}<span data-elapsed></span>: ci vuole fino a mezzo minuto, il riquadro si aggiorna da solo.</p>
+    {% elif forecast_unavailable %}
+      <p class="lh-empty">Timestral non è disponibile in questa installazione: serve l'immagine Docker, che include il modello.</p>
+    {% elif forecast %}
+      <p class="lh-card-subtitle">
+        {% if forecast_day %}
+          {% if campaign is None %}Tutte le campagne{% else %}Campagna: {{ campaign|default:"senza nome" }}{% endif %} · dal {{ forecast_day|date:"D j M" }}, {{ forecast_days }} giorn{{ forecast_days|pluralize:"o,i" }}: <strong>{{ forecast.actual }} lead</strong>, previsti {{ forecast.expected }} ·
+          {% if campaign is None %}{% if forecast.alerts %}l'avviso sarebbe partito {{ forecast.alerts|length }} volt{{ forecast.alerts|length|pluralize:"a,e" }}{% else %}nessun avviso{% endif %}{% else %}{% if forecast.alerts %}{{ forecast.alerts|length }} cal{{ forecast.alerts|length|pluralize:"o,i" }} da avviso{% else %}nessun calo da avviso{% endif %} (l'avviso vero guarda tutte le campagne){% endif %}{% if forecast.alerts %} ({% for at in forecast.alerts %}{{ at|date:"D j M H:i" }}{% if not forloop.last %}, {% endif %}{% endfor %}){% endif %}
+        {% else %}
+          Tutte le campagne · controllo di {{ forecast.end|date:"D j M, H:i" }} ·
+          ultime {{ forecast.window }} ore: <strong>{{ forecast.actual }} lead</strong>, previsti {{ forecast.expected }} (di solito tra {{ forecast.low }} e {{ forecast.high }})
+        {% endif %}
+      </p>
+      <div class="lh-chart" role="img" aria-label="Lead all'ora e previsione di Timestral, {{ forecast.points|length }} ore">
+        <div class="lh-chart-plot">
+          {% for tick in forecast.ticks %}
+            <div class="lh-chart-grid" style="bottom: {% widthratio tick forecast.peak 100 %}%"><span>{{ tick }}</span></div>
+          {% endfor %}
+          <div class="lh-chart-bars{% if forecast.dense %} is-dense{% endif %}">
+            {% for point in forecast.points %}
+              <div class="lh-chart-col" tabindex="0" aria-label="{{ point.hour|date:'D j M H:i' }}: {{ point.count }} lead{% if point.median is not None %}, previsti {{ point.median }}{% endif %}">
+                <span class="lh-chart-bar{% if not point.count %} is-zero{% endif %}{% if point.below %} is-below{% endif %}" style="height: {{ point.height }}%"></span>
+                {% if point.median is not None %}
+                  <span class="lh-forecast-band" style="bottom: {{ point.band_bottom }}%; height: {{ point.band_height }}%"></span>
+                  <span class="lh-forecast-median" style="bottom: {{ point.median_at }}%"></span>
+                {% endif %}
+                <span class="lh-chart-tip"><strong>{{ point.count }} lead</strong>{{ point.hour|date:"D j M H:i" }}{% if point.median is not None %}<span>Timestral: {{ point.median }} ({{ point.low }}–{{ point.high }})</span>{% endif %}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="lh-chart-axis{% if forecast.dense %} is-dense{% endif %}">
+          {% for point in forecast.points %}<span>{{ point.label }}</span>{% endfor %}
+        </div>
+      </div>
+      <ul class="lh-forecast-legend">
+        <li><span class="lh-forecast-swatch"></span>Lead arrivati</li>
+        <li><span class="lh-forecast-swatch is-band"></span>Previsione, 5–95%</li>
+        <li><span class="lh-forecast-swatch is-median"></span>Previsione, mediana</li>
+        <li><span class="lh-forecast-swatch is-below"></span>Sotto il minimo previsto</li>
+      </ul>
+      <details class="lh-details">
+        <summary>Mostra la previsione come tabella</summary>
+        <table class="lh-table">
+          <thead><tr><th scope="col">Ora</th><th scope="col" class="lh-num">Lead</th><th scope="col" class="lh-num">Previsti</th><th scope="col" class="lh-num">Minimo (5%)</th><th scope="col" class="lh-num">Massimo (95%)</th></tr></thead>
+          <tbody>{% for point in forecast.points reversed %}{% if point.median is not None %}<tr><td>{{ point.hour|date:"D d/m H:i" }}</td><td class="lh-num">{{ point.count }}</td><td class="lh-num">{{ point.median }}</td><td class="lh-num">{{ point.low }}</td><td class="lh-num">{{ point.high }}</td></tr>{% endif %}{% endfor %}</tbody>
+        </table>
+      </details>
+    {% elif forecast_day %}
+      <p class="lh-empty">Nessuna previsione per questo periodo.</p>
+    {% else %}
+      <p class="lh-empty">Nessuna previsione nelle ultime 3 ore. Timestral confronta ogni ora i lead delle ultime 6 ore con quelli che si aspettava; serve l'immagine Docker, che include il modello. Puoi anche scegliere un giorno qui sopra.</p>
     {% endif %}
   </section>
 
