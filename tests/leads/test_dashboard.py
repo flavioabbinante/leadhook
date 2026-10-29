@@ -10,10 +10,10 @@ from tests.factories import make_destination, make_lead
 
 def test_dashboard_stats_counts_by_form():
     now = timezone.now()
-    lead = make_lead()
+    lead = make_lead(created_time=now)
     older = make_lead(leadgen_id="2", form=lead.form)
-    Lead.objects.filter(pk=older.pk).update(received_at=now - timedelta(days=3))
-    make_lead(leadgen_id="3", form=lead.form, status=Lead.Status.UNROUTED)
+    Lead.objects.filter(pk=older.pk).update(created_time=now - timedelta(days=3))
+    make_lead(leadgen_id="3", form=lead.form, created_time=now, status=Lead.Status.UNROUTED)
     stats = dashboard_stats(now)
     assert stats["leads_today"] == 2
     assert stats["leads_week"] == 3
@@ -26,9 +26,9 @@ def test_dashboard_stats_counts_by_form():
 
 def test_dashboard_stats_trends_and_delivery_health():
     now = timezone.now()
-    lead = make_lead(status=Lead.Status.DELIVERED)
+    lead = make_lead(created_time=now, status=Lead.Status.DELIVERED)
     older = make_lead(leadgen_id="2", form=lead.form)
-    Lead.objects.filter(pk=older.pk).update(received_at=now - timedelta(days=9))
+    Lead.objects.filter(pk=older.pk).update(created_time=now - timedelta(days=9))
     destination = make_destination()
     Delivery.objects.create(lead=lead, destination=destination, status=Delivery.Status.SUCCESS)
     Delivery.objects.create(lead=older, destination=destination, status=Delivery.Status.FAILED)
@@ -41,3 +41,11 @@ def test_dashboard_stats_trends_and_delivery_health():
     )
     assert [p.week for p in stats["pages"]] == [2 - 1]
     assert list(stats["recent_leads"])[0] == lead
+
+
+def test_dashboard_counts_replayed_leads_on_the_day_meta_created_them():
+    now = timezone.now()
+    make_lead(created_time=now - timedelta(days=20))  # received now, e.g. a Meta resend
+    stats = dashboard_stats(now)
+    assert (stats["leads_today"], stats["leads_week"]) == (0, 0)
+    assert [p.week for p in stats["pages"]] == [0]

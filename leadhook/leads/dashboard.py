@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 from django.db.models import Count, Q
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from leadhook.core.health import heartbeat_is_fresh
@@ -23,10 +24,12 @@ def dashboard_stats(now: datetime) -> dict:
 
     day_start = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
-    recent = Lead.objects.filter(received_at__gte=week_start)
+    # Counted by when the lead was sent, like the stats page: Meta replays old leads.
+    leads = Lead.objects.annotate(sent=Coalesce("created_time", "received_at"))
+    recent = leads.filter(sent__gte=week_start)
     forms = list(
         recent.values("form_external_id", "form__name")
-        .annotate(today=Count("pk", filter=Q(received_at__gte=day_start)), week=Count("pk"))
+        .annotate(today=Count("pk", filter=Q(sent__gte=day_start)), week=Count("pk"))
         .order_by("-week", "form_external_id")
     )
     busiest_form = max((row["week"] for row in forms), default=0)
@@ -35,7 +38,11 @@ def dashboard_stats(now: datetime) -> dict:
 
     pages = list(
         Page.objects.annotate(
-            week=Count("leads", filter=Q(leads__received_at__gte=week_start))
+            week=Count(
+                "leads",
+                filter=Q(leads__created_time__gte=week_start)
+                | Q(leads__created_time__isnull=True, leads__received_at__gte=week_start),
+            )
         ).order_by("name", "page_id")
     )
     busiest_page = max((page.week for page in pages), default=0)
@@ -49,13 +56,13 @@ def dashboard_stats(now: datetime) -> dict:
     delivery_total = sum(delivery_counts.values())
 
     return {
-        "leads_today": Lead.objects.filter(received_at__gte=day_start).count(),
-        "leads_yesterday": Lead.objects.filter(
-            received_at__gte=day_start - timedelta(days=1), received_at__lt=day_start
+        "leads_today": leads.filter(sent__gte=day_start).count(),
+        "leads_yesterday": leads.filter(
+            sent__gte=day_start - timedelta(days=1), sent__lt=day_start
         ).count(),
         "leads_week": recent.count(),
-        "leads_previous_week": Lead.objects.filter(
-            received_at__gte=week_start - timedelta(days=7), received_at__lt=week_start
+        "leads_previous_week": leads.filter(
+            sent__gte=week_start - timedelta(days=7), sent__lt=week_start
         ).count(),
         "forms": forms,
         "failed_deliveries": Delivery.objects.filter(status=Delivery.Status.FAILED).count(),
@@ -69,9 +76,7 @@ def dashboard_stats(now: datetime) -> dict:
         "delivery_pending": _percent(delivery_counts[Delivery.Status.PENDING], delivery_total),
         "delivery_failed": _percent(delivery_counts[Delivery.Status.FAILED], delivery_total),
         "active_destinations": Destination.objects.filter(active=True).count(),
-        "recent_leads": Lead.objects.select_related("form", "page").order_by("-received_at")[
-            :RECENT_LEADS
-        ],
+        "recent_leads": leads.select_related("form", "page").order_by("-sent")[:RECENT_LEADS],
         "beat_ok": heartbeat_is_fresh(),
         "setup_complete": setup_complete(),
     }
