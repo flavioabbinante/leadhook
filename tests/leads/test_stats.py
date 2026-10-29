@@ -1,4 +1,4 @@
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from django.contrib.auth.models import User
@@ -10,14 +10,18 @@ from leadhook.leads.models import Lead
 from leadhook.leads.stats import (
     FORECAST_CACHE_KEY,
     daily_counts,
+    forecast_cache_key,
+    forecast_next,
     forecast_period,
-    period_cache_key,
     period_leads,
 )
-from leadhook.leads.tasks import forecast_lead_period
+from leadhook.leads.tasks import forecast_leads
 from tests.factories import fake_forecaster, make_lead
 
 URL = reverse("stats")
+# The tests count days back from "now": pinned so their periods keep (or skip) the 25 October
+# switch from summer time whatever day the suite runs.
+NOW = datetime(2026, 10, 27, 11, 0, tzinfo=UTC)
 
 
 def _lead(leadgen_id, days_ago, campaign="Autunno", **kwargs):
@@ -88,7 +92,8 @@ def _received(leadgen_id, at):
     Lead.objects.filter(pk=lead.pk).update(received_at=at)
 
 
-def test_forecast_period_checks_every_six_hour_block_like_the_hourly_check():
+@mock.patch("django.utils.timezone.now", return_value=NOW)
+def test_forecast_period_checks_every_six_hour_block_like_the_hourly_check(_now):
     now = timezone.now()
     first_day = timezone.localdate() - timedelta(days=3)
     start = timezone.make_aware(timezone.datetime.combine(first_day, timezone.datetime.min.time()))
@@ -124,34 +129,72 @@ def test_forecast_period_stops_at_the_current_hour():
     assert len(result["counts"]) == len(result["median"]) == timezone.localtime(now).hour
 
 
-def test_stats_page_reviews_a_chosen_period_in_the_background(admin_client):
+def _run_queued(delay, forecaster):
+    """Run the forecast the page queued, as the worker would."""
+    with mock.patch("leadhook.leads.stats._forecaster", return_value=forecaster):
+        forecast_leads(*delay.call_args.args)
+
+
+@mock.patch("django.utils.timezone.now", return_value=NOW)
+def test_stats_page_reviews_a_chosen_period_in_the_background(_now, admin_client):
     day = timezone.localdate() - timedelta(days=5)
-    params = {"forecast_day": day.isoformat(), "forecast_days": 2}
-    with mock.patch("leadhook.leads.tasks.forecast_lead_period.delay") as delay:
+    params = {"forecast_view": "past", "forecast_day": day.isoformat(), "forecast_days": 2}
+    with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
         content = admin_client.get(URL, params).content.decode()
         admin_client.get(URL, params)  # still computing: not queued twice
-    delay.assert_called_once_with(day.isoformat(), 2, None)
+    key = forecast_cache_key("past", 2, None, day, timezone.now())
+    delay.assert_called_once_with(key, "past", 2, None, day.isoformat())
     assert "Timestral sta calcolando 2 giorni" in content and 'data-pending="1"' in content
 
-    with mock.patch("leadhook.leads.stats._forecaster", return_value=fake_forecaster(60, 30)):
-        forecast_lead_period(day.isoformat(), 2)
-    assert cache.get(f"{period_cache_key(day, 2)}:pending") is None
+    _run_queued(delay, fake_forecaster(60, 30))
+    assert cache.get(f"{key}:pending") is None
     content = admin_client.get(URL, params).content.decode()
     assert "l'avviso sarebbe partito 2 volte" in content  # at most one a day, as for real
     assert content.count('class="lh-forecast-band"') == 48
 
-    cache.set(period_cache_key(day, 2), {})  # no Timestral
+    cache.set(key, {})  # no Timestral
     assert "Timestral non è disponibile" in admin_client.get(URL, params).content.decode()
 
 
-def test_stats_page_ignores_a_future_or_invalid_day(admin_client):
+def test_past_view_defaults_to_the_last_days_up_to_today(admin_client):
     tomorrow = (timezone.localdate() + timedelta(days=1)).isoformat()
-    with mock.patch("leadhook.leads.tasks.forecast_lead_period.delay") as delay:
-        for day in (tomorrow, "not-a-date"):
-            assert "Nessuna previsione nelle ultime 3 ore" in (
-                admin_client.get(URL, {"forecast_day": day}).content.decode()
-            )
+    week_start = (timezone.localdate() - timedelta(days=6)).isoformat()
+    with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
+        for day in (tomorrow, "not-a-date", ""):
+            admin_client.get(URL, {"forecast_view": "past", "forecast_day": day})
+            cache.clear()
+    assert {call.args[2:] for call in delay.call_args_list} == {(7, None, week_start)}
+
+
+def test_last_check_view_ignores_the_day(admin_client):
+    with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
+        content = admin_client.get(URL, {"forecast_day": "2026-01-01"}).content.decode()
+    assert "Nessuna previsione nelle ultime 3 ore" in content
     delay.assert_not_called()
+
+
+def test_forecast_next_continues_the_last_day_of_leads():
+    now = timezone.now()
+    _received("1", now - timedelta(hours=2))
+    with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
+        forecaster.return_value = fake_forecaster(median=70, low=35)
+        result = forecast_next(7, now, campaign="Campaign 1")
+        call = forecaster.return_value.forecast.call_args
+    assert call.args[0].shape == (1, 4 * 7 * 24) and call.kwargs["prediction_length"] == 7 * 24
+    assert result["counts"][:24].count(1) == 1 and result["counts"][24:] == [None] * 7 * 24
+    assert len(result["median"]) == 7 * 24 and "alerts" not in result
+
+
+def test_stats_page_shows_the_next_days(admin_client):
+    params = {"forecast_view": "next", "forecast_days": 7}
+    with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
+        content = admin_client.get(URL, params).content.decode()
+    assert "Timestral sta calcolando i prossimi 7 giorni" in content
+    _run_queued(delay, fake_forecaster(median=700, low=350))
+    content = admin_client.get(URL, params).content.decode()
+    assert "<strong>previsti 700 lead</strong>, circa 100 al giorno" in content
+    assert content.count("lh-chart-col is-future") == 7 * 24
+    assert content.count('class="lh-forecast-band"') == 7 * 24
 
 
 def test_timestral_card_reviews_one_campaign(admin_client):
@@ -166,11 +209,12 @@ def test_timestral_card_reviews_one_campaign(admin_client):
         histories = forecaster.return_value.forecast.call_args.args[0]
     assert histories.sum() == 4 + 24  # only Autunno's lead, in the history of 4 blocks, 24 checks
 
-    with mock.patch("leadhook.leads.tasks.forecast_lead_period.delay") as delay:
-        content = admin_client.get(URL, {"campaign": "Autunno"}).content.decode()
-    delay.assert_called_once_with(yesterday.isoformat(), 2, "Autunno")  # yesterday and today
+    # The hourly check covers all campaigns: "last" turns into the campaign's last days.
+    params = {"campaign": "Autunno", "forecast_view": "last", "forecast_days": 2}
+    with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
+        content = admin_client.get(URL, params).content.decode()
+    assert delay.call_args.args[1:] == ("past", 2, "Autunno", yesterday.isoformat())
     assert "Timestral sta calcolando la campagna Autunno, 2 giorni" in content
-    with mock.patch("leadhook.leads.stats._forecaster", return_value=fake_forecaster(60, 30)):
-        forecast_lead_period(yesterday.isoformat(), 2, "Autunno")
-    content = admin_client.get(URL, {"campaign": "Autunno"}).content.decode()
-    assert "Campagna: Autunno · dal" in content and "cali da avviso" in content
+    _run_queued(delay, fake_forecaster(60, 30))
+    content = admin_client.get(URL, params).content.decode()
+    assert "Campagna: Autunno ·" in content and "cali da avviso" in content
