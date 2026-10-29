@@ -20,7 +20,7 @@ from .services import (
     ingest_lead,
     reconcile_form,
 )
-from .stats import DROP_WINDOW, forecast_period, lead_drop, period_cache_key
+from .stats import DROP_WINDOW, forecast_next, forecast_period, lead_drop
 
 logger = logging.getLogger(__name__)
 
@@ -119,15 +119,20 @@ def check_lead_drop() -> None:
 
 
 @shared_task
-def forecast_lead_period(first_day: str, days: int, campaign: str | None = None) -> None:
-    """Timestral's forecast of a period (one campaign, or all with None) for the stats page;
-    {} when Timestral is unavailable."""
-    day = date.fromisoformat(first_day)
-    key = period_cache_key(day, days, campaign)
+def forecast_leads(
+    key: str, view: str, days: int, campaign: str | None = None, first_day: str | None = None
+) -> None:
+    """Timestral's forecast for the stats page card under `key`: a "past" period from
+    `first_day` or the "next" days; {} when Timestral is unavailable."""
+    now = timezone.now()
     try:
-        result = forecast_period(day, days, timezone.now(), campaign) or {}
-        # A period that includes today grows every hour: recompute it soon.
-        ongoing = day + timedelta(days=days) > timezone.localdate()
-        cache.set(key, result, timeout=600 if ongoing else 6 * 3600)
+        if view == "next":
+            result, timeout = forecast_next(days, now, campaign), 3600
+        else:
+            day = date.fromisoformat(first_day)
+            result = forecast_period(day, days, now, campaign)
+            # A period that includes today grows every hour: recompute it soon.
+            timeout = 600 if day + timedelta(days=days) > timezone.localdate() else 6 * 3600
+        cache.set(key, result or {}, timeout=timeout)
     finally:
         cache.delete(f"{key}:pending")
