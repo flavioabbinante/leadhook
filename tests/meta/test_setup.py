@@ -46,6 +46,12 @@ def test_app_credentials_are_required(admin_client):
     assert not MetaApp.objects.exists()
 
 
+def test_setup_links_meta_app_deletion(admin_client):
+    meta_app = make_meta_app()
+    html = admin_client.get(SETUP).content.decode()
+    assert reverse("admin:meta_metaapp_delete", args=[meta_app.pk]) in html
+
+
 def test_setup_shows_callback_url_and_verify_token(admin_client):
     app = make_meta_app()
     html = admin_client.get(SETUP).content.decode()

@@ -79,9 +79,23 @@ class PageForm(SecretAwareModelForm):
         fields = "__all__"
 
 
+class FormTemplateInline(admin.StackedInline):
+    model = Form
+    fields = ("name", "form_id", "payload_template")
+    readonly_fields = ("name", "form_id")
+    extra = 0
+    can_delete = False
+    verbose_name_plural = "template del payload per form"
+
+    def has_add_permission(self, request, obj=None):
+        # Forms come from Meta (form sync), never from here.
+        return False
+
+
 @admin.register(Page)
 class PageAdmin(admin.ModelAdmin):
     form = PageForm
+    inlines = (FormTemplateInline,)
     list_display = ("name", "page_id", "subscribed", "last_lead_at", "error")
     list_filter = ("subscribed", "meta_app")
     search_fields = ("name", "page_id")

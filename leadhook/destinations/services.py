@@ -103,7 +103,7 @@ def attempt_delivery(delivery: Delivery, *, now: datetime | None = None) -> Send
     # the delivery PENDING with its lease held and no error recorded.
     try:
         context = build_context(delivery.lead, delivery, attempt=delivery.attempts, sent_at=now)
-        body = render_body(destination, context)
+        body = render_body(destination, context, delivery.lead.form)
         headers = build_headers(
             destination,
             body=body,

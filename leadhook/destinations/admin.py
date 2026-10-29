@@ -188,7 +188,8 @@ class DestinationAdmin(admin.ModelAdmin):
             lead, Delivery(lead=lead, destination=obj), attempt=1, sent_at=timezone.now()
         )
         try:
-            body = json.dumps(json.loads(render_body(obj, context)), indent=2, ensure_ascii=False)
+            body = render_body(obj, context, lead.form)
+            body = json.dumps(json.loads(body), indent=2, ensure_ascii=False)
         except TemplateError as exc:
             return str(exc)
         others = format_html_join(
