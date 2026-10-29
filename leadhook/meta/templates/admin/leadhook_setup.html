@@ -19,6 +19,9 @@
         <div class="lh-actions">
           <a class="lh-btn lh-btn-outline" href="{% url 'facebook-login' %}">Ricollega</a>
           <a class="lh-btn lh-btn-light" href="{% url 'admin:meta_metaapp_change' meta_app.pk %}">Impostazioni dell'app Meta</a>
+          {% if perms.meta.delete_metaapp %}
+            <a class="lh-btn lh-btn-light" href="{% url 'admin:meta_metaapp_delete' meta_app.pk %}">Elimina app Meta</a>
+          {% endif %}
         </div>
       {% else %}
         <p>LeadHook accede tramite la tua app Meta. Una volta sola:
