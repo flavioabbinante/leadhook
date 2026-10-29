@@ -159,7 +159,7 @@ def test_fetch_lead_exhaustion_alerts(mailoutbox):
 def _leads_at(when, count, start=0):
     form = Form.objects.first() or make_form()
     for i in range(count):
-        lead = make_lead(form, leadgen_id=f"drop-{start + i}")
+        lead = make_lead(form, leadgen_id=f"drop-{start + i}", status=Lead.Status.DELIVERED)
         Lead.objects.filter(pk=lead.pk).update(received_at=when)
 
 
@@ -178,6 +178,17 @@ def test_check_lead_drop_alerts_once_when_volume_collapses(mailoutbox, no_foreca
     check_lead_drop()
     assert len(mailoutbox) == 1
     assert "sono arrivati 2 lead" in mailoutbox[0].body
+
+
+def test_lead_drop_counts_only_routed_leads(no_forecast):
+    now = timezone.now()
+    for week in range(1, 5):
+        _leads_at(now - timedelta(weeks=week, hours=1), 10, start=week * 100)
+    _leads_at(now - timedelta(hours=1), 2)
+    for i in range(8):
+        lead = make_lead(Form.objects.first(), leadgen_id=f"x{i}", status=Lead.Status.UNROUTED)
+        Lead.objects.filter(pk=lead.pk).update(received_at=now - timedelta(hours=1))
+    assert lead_drop(now) == (2, 10)
 
 
 def test_lead_drop_ignores_normal_and_low_volume(no_forecast):
