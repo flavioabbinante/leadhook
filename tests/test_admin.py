@@ -403,3 +403,26 @@ def test_payload_preview_can_still_pick_a_lead_never_sent_to_the_destination(adm
     url = reverse("admin:destinations_destination_change", args=[destination.pk])
     assert "Lead usato: new" in admin_client.get(url, {"preview_lead": "new"}).content.decode()
     assert 'href="?preview_lead=new"' in admin_client.get(url).content.decode()
+
+
+def test_page_edits_each_form_payload_template(admin_client):
+    form = make_form()
+    page = form.page
+    response = admin_client.post(
+        reverse("admin:meta_page_change", args=[page.pk]),
+        {
+            "meta_app": page.meta_app.pk,
+            "page_id": page.page_id,
+            "name": page.name,
+            "page_token": "",
+            "subscribed": "on",
+            "forms-TOTAL_FORMS": "1",
+            "forms-INITIAL_FORMS": "1",
+            "forms-0-id": form.pk,
+            "forms-0-page": page.pk,
+            "forms-0-payload_template": '{"tel": {{ data.phone | tojson }}}',
+        },
+    )
+    assert response.status_code == 302
+    form.refresh_from_db()
+    assert form.payload_template == '{"tel": {{ data.phone | tojson }}}'

@@ -116,6 +116,15 @@ class Form(models.Model):
             "Se impostate, sostituiscono le destinazioni predefinite della pagina per questo form."
         ),
     )
+    payload_template = models.TextField(
+        "template del payload",
+        blank=True,
+        help_text=(
+            "Template Jinja2 che produce JSON, usato per i webhook che ricevono i lead di "
+            "questo form al posto di quello della destinazione. Vuoto: vale quello della "
+            "destinazione."
+        ),
+    )
 
     class Meta:
         verbose_name = "form"
