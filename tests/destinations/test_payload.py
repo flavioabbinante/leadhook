@@ -64,6 +64,20 @@ def test_render_body_uses_custom_template():
     assert json.loads(render_body(delivery.destination, context)) == {"name": "Jane Doe"}
 
 
+def test_form_template_wins_over_destination_template():
+    lead = make_lead()
+    context, delivery = _context(lead)
+    delivery.destination.payload_template = '{"from": "destination"}'
+    lead.form.payload_template = '{"form_name": {{ data.full_name | tojson }}}'
+    assert json.loads(render_body(delivery.destination, context, lead.form)) == {
+        "form_name": "Jane Doe"
+    }
+    lead.form.payload_template = " "
+    assert json.loads(render_body(delivery.destination, context, lead.form)) == {
+        "from": "destination"
+    }
+
+
 def _map(destination, target, source, **kwargs):
     FieldMapping.objects.create(destination=destination, target=target, source=source, **kwargs)
 

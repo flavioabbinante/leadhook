@@ -47,7 +47,7 @@ def build_context(lead: Lead, delivery: Delivery, *, attempt: int, sent_at: date
     }
 
 
-def render_body(destination: Destination, context: dict) -> str:
+def render_body(destination: Destination, context: dict, form: Form | None = None) -> str:
     if destination.is_telegram:
         message = {"chat_id": destination.telegram_chat_id}
         if destination.message_template.strip():
@@ -56,6 +56,8 @@ def render_body(destination: Destination, context: dict) -> str:
         else:
             message["text"] = telegram_text(context)
         return json.dumps(message, ensure_ascii=False)
+    if form and form.payload_template.strip():
+        return render_payload(form.payload_template, context)
     if destination.payload_template.strip():
         return render_payload(destination.payload_template, context)
     mappings = list(destination.field_mappings.all())
