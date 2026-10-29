@@ -91,7 +91,7 @@ def test_stats_page_draws_the_last_timestral_forecast(admin_client):
 
 def _received(leadgen_id, at):
     form = Lead.objects.first().form if Lead.objects.exists() else None
-    lead = make_lead(form, leadgen_id=leadgen_id)
+    lead = make_lead(form, leadgen_id=leadgen_id, status=Lead.Status.DELIVERED)
     Lead.objects.filter(pk=lead.pk).update(received_at=at)
 
 

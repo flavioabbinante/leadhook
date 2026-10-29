@@ -38,7 +38,7 @@ FORECAST_MODEL = "mistralai/Timestral-28M"
 FORECAST_LOW = 0.05  # with Timestral, also under this quantile: an unusual drop, not just a dip
 FORECAST_HIGH = 0.95  # top of the band drawn on the stats page
 FORECAST_MIN_DAYS = 14  # from the first lead: with less, Timestral's forecasts are noise
-FORECAST_VERSION = 2  # bump when the forecast changes: cached results of older code are skipped
+FORECAST_VERSION = 3  # bump when the forecast changes: cached results of older code are skipped
 FORECAST_CACHE_KEY = f"lead_forecast:{FORECAST_VERSION}"  # the last check's, for the chart
 FORECAST_CHART_HOURS = 48
 FORECAST_PERIODS = (1, 2, 3, 7, 14)  # days shown at once: 14 past days take ~45 s on CPU
@@ -121,14 +121,12 @@ def lead_drop(now: datetime) -> tuple[int, float] | None:
     """(received, expected) when the last DROP_WINDOW full hours got far fewer leads than
     expected, else None. Expected comes from Timestral fed the previous DROP_WEEKS weeks hour by
     hour (and the count must also be under its low quantile), or without it from the same hours
-    of those weeks. Test leads (manual) don't count."""
+    of those weeks. Only leads routed to a destination count, test leads (manual) don't."""
     window = int(DROP_WINDOW.total_seconds() // 3600)
     week = 7 * 24
     end = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
     start = end - DROP_WINDOW - timedelta(weeks=DROP_WEEKS)
-    counts = hourly_counts(
-        Lead.objects.exclude(source=Lead.Source.MANUAL), start, DROP_WEEKS * week + window
-    )
+    counts = hourly_counts(_campaign_leads(None), start, DROP_WEEKS * week + window)
     history, actual = counts[:-window], sum(counts[-window:])
 
     days = history_days(history)
@@ -160,8 +158,18 @@ def forecast_cache_key(
     return f"lead_forecast:{FORECAST_VERSION}:{view}:{start}:{days}:{scope}"
 
 
+ROUTED_STATUSES = [
+    Lead.Status.ROUTED,
+    Lead.Status.DELIVERED,
+    Lead.Status.PARTIALLY_FAILED,
+    Lead.Status.FAILED,
+]
+
+
 def _campaign_leads(campaign: str | None) -> QuerySet:
-    leads = Lead.objects.exclude(source=Lead.Source.MANUAL)
+    """Leads Timestral learns from: routed to a destination (a failed delivery still counts,
+    it has its own alert), never test leads."""
+    leads = Lead.objects.filter(status__in=ROUTED_STATUSES).exclude(source=Lead.Source.MANUAL)
     return leads if campaign is None else leads.filter(campaign_name=campaign)
 
 
