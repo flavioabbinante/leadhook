@@ -37,7 +37,9 @@ DROP_RATIO = 0.3  # alert only under this share of the expected volume
 FORECAST_MODEL = "mistralai/Timestral-28M"
 FORECAST_LOW = 0.05  # with Timestral, also under this quantile: an unusual drop, not just a dip
 FORECAST_HIGH = 0.95  # top of the band drawn on the stats page
-FORECAST_CACHE_KEY = "lead_forecast"  # the last check's forecast, for the stats page chart
+FORECAST_MIN_DAYS = 14  # from the first lead: with less, Timestral's forecasts are noise
+FORECAST_VERSION = 2  # bump when the forecast changes: cached results of older code are skipped
+FORECAST_CACHE_KEY = f"lead_forecast:{FORECAST_VERSION}"  # the last check's, for the chart
 FORECAST_CHART_HOURS = 48
 FORECAST_PERIODS = (1, 2, 3, 7, 14)  # days shown at once: 14 past days take ~45 s on CPU
 FORECAST_VIEWS = (
@@ -62,23 +64,40 @@ def _forecaster():
     return TimestralForecaster.from_pretrained(FORECAST_MODEL)
 
 
-def _forecast(histories: list[list[int]], steps: int) -> list[tuple[list, list, list]] | None:
-    """For each history, the hourly (median, low, high) leads Timestral expects in the next
-    `steps` hours; None if unavailable. One batch: much faster than a call per history."""
+def history_days(history: list[int]) -> int:
+    """Whole days from the first lead in `history` to its end; 0 without any lead."""
+    first = next((i for i, n in enumerate(history) if n), len(history))
+    return (len(history) - first) // 24
+
+
+def _forecast(histories: list[list[int]], steps: int) -> list[tuple[list, list, list, list]] | None:
+    """For each history, the hourly (median, low, high, mean) leads Timestral expects in the
+    next `steps` hours; None if unavailable. One batch: much faster than a call per history."""
     try:
         import numpy as np
 
-        forecast = _forecaster().forecast(np.array(histories, dtype=float), prediction_length=steps)
+        # Before the first lead the page wasn't collecting yet: unknown hours, not empty ones.
+        firsts = [next((i for i, n in enumerate(h) if n), len(h)) for h in histories]
+        context = np.array(histories, dtype=float)
+        for row, first in zip(context, firsts, strict=True):
+            row[:first] = np.nan
+        forecast = _forecaster().forecast(context, prediction_length=steps)
+        levels = np.array(forecast.quantile_levels, dtype=float)
+        quantiles = np.clip(np.asarray(forecast.quantiles, dtype=float), 0, None)  # no negatives
     except ImportError:
         return None
     except Exception:
         logger.exception("Timestral forecast failed, falling back to the plain average")
         return None
-    quantiles = forecast.median, forecast.quantile(FORECAST_LOW), forecast.quantile(FORECAST_HIGH)
-    return [
-        tuple([float(v) for v in values[i].flatten()] for values in quantiles)
-        for i in range(len(histories))
-    ]
+
+    def level(q: float):
+        return quantiles[..., int(np.abs(levels - q).argmin())]
+
+    # The mean is the integral of the quantile function: the median sum runs ~10% low on counts.
+    edges = np.concatenate([[0.0], (levels[1:] + levels[:-1]) / 2, [1.0]])
+    mean = (quantiles * np.diff(edges)).sum(-1)
+    series = level(0.5), level(FORECAST_LOW), level(FORECAST_HIGH), mean
+    return [tuple(values[i].ravel().tolist() for values in series) for i in range(len(histories))]
 
 
 def _is_drop(actual: int, expected: float, low: float) -> bool:
@@ -112,14 +131,17 @@ def lead_drop(now: datetime) -> tuple[int, float] | None:
     )
     history, actual = counts[:-window], sum(counts[-window:])
 
-    forecast = _forecast([history], window)
+    days = history_days(history)
+    forecast = _forecast([history], window) if days >= FORECAST_MIN_DAYS else None
+    if days < FORECAST_MIN_DAYS:
+        cache.set(FORECAST_CACHE_KEY, {"short_history": days}, timeout=3 * 3600)
     if forecast is not None:
-        median, low_hourly, high_hourly = forecast[0]
+        median, low_hourly, high_hourly, mean = forecast[0]
         # shortcut: summing hourly quantiles gives a lower bound than the window's true quantile
         # (fewer alerts); forecast 6-hour buckets instead if real drops go unnoticed.
-        expected, low = sum(median), sum(low_hourly)
+        expected, low = sum(mean), sum(low_hourly)
         snapshot = {"end": end, "counts": counts[-FORECAST_CHART_HOURS:], "median": median}
-        snapshot |= {"low": low_hourly, "high": high_hourly}
+        snapshot |= {"low": low_hourly, "high": high_hourly, "mean": mean}
         cache.set(FORECAST_CACHE_KEY, snapshot, timeout=3 * 3600)  # gone if checks stop
     else:
         same_hours = [counts[w * week : w * week + window] for w in range(DROP_WEEKS)]
@@ -135,7 +157,7 @@ def forecast_cache_key(
     # Campaign names are free text: hashed, they make a safe cache key.
     scope = "all" if campaign is None else hashlib.sha256(campaign.encode()).hexdigest()[:16]
     start = first_day.isoformat() if view == "past" else f"{now.astimezone(UTC):%Y%m%d%H}"
-    return f"lead_forecast:{view}:{start}:{days}:{scope}"
+    return f"lead_forecast:{FORECAST_VERSION}:{view}:{start}:{days}:{scope}"
 
 
 def _campaign_leads(campaign: str | None) -> QuerySet:
@@ -150,13 +172,15 @@ def forecast_next(days: int, now: datetime, campaign: str | None = None) -> dict
     end = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
     context, horizon = DROP_WEEKS * 7 * 24, days * 24
     counts = hourly_counts(_campaign_leads(campaign), end - timedelta(hours=context), context)
+    if (days := history_days(counts)) < FORECAST_MIN_DAYS:
+        return {"short_history": days}
     forecasts = _forecast([counts], horizon)
     if forecasts is None:
         return None
-    median, low, high = forecasts[0]
+    median, low, high, mean = forecasts[0]
     shown = counts[-24:] + [None] * horizon  # None: still to come
     snapshot = {"end": end + timedelta(hours=horizon), "counts": shown, "median": median}
-    return snapshot | {"low": low, "high": high, "now": end}
+    return snapshot | {"low": low, "high": high, "mean": mean, "now": end}
 
 
 def forecast_period(
@@ -188,23 +212,27 @@ def forecast_period(
     bounds = list(zip(offsets, [*offsets[1:], hours], strict=True))
     # Every hourly check whose window ends in the period: a drop across two blocks still shows.
     checks = range(1 - window, hours - window + 1)
+    if (history := history_days(counts[:context])) < FORECAST_MIN_DAYS:  # the earliest check's
+        return {"short_history": history}
     histories = [counts[base + b - context : base + b] for b in (*offsets, *checks)]
     forecasts = _forecast(histories, max(window, *(e - b for b, e in bounds)))
     if forecasts is None:
         return None
 
     snapshot = {"end": end, "counts": counts[base:], "median": [], "low": [], "high": []}
+    snapshot["mean"] = []
     for (b, e), block in zip(bounds, forecasts[: len(bounds)], strict=True):
-        median, low, high = (values[: e - b] for values in block)  # today stops at this hour
+        median, low, high, mean = (values[: e - b] for values in block)  # today: up to now
         snapshot["median"] += median
         snapshot["low"] += low
         snapshot["high"] += high
+        snapshot["mean"] += mean
     snapshot["alerts"] = []
     for s, check in zip(checks, forecasts[len(bounds) :], strict=True):
-        median, low, _ = (values[:window] for values in check)
+        _, low, _, mean = (values[:window] for values in check)
         at = start + timedelta(hours=s + window)  # when the hourly check runs
         muted = snapshot["alerts"] and at - snapshot["alerts"][-1] < timedelta(days=1)
-        if not muted and _is_drop(sum(counts[base + s : base + s + window]), sum(median), sum(low)):
+        if not muted and _is_drop(sum(counts[base + s : base + s + window]), sum(mean), sum(low)):
             snapshot["alerts"].append(at)  # then check_lead_drop stays quiet for a day
     return snapshot
 
@@ -217,7 +245,9 @@ def forecast_chart(snapshot: dict | None) -> dict | None:
     counts, median, low, high = (snapshot[k] for k in ("counts", "median", "low", "high"))
     window = len(median)
     first = snapshot["end"] - timedelta(hours=len(counts))
-    peak = math.ceil(max(*(c for c in counts if c is not None), *high)) or 1
+    seen = max(*(c for c in counts if c is not None), *median)
+    # An exploded top quantile would flatten the chart: its band is cut at 3x what's seen.
+    peak = math.ceil(max(seen, min(max(high), 3 * seen))) or 1
 
     def height(value: float) -> str:
         return f"{value * 100 / peak:.1f}"
@@ -237,7 +267,7 @@ def forecast_chart(snapshot: dict | None) -> dict | None:
                 "low": round(low[f], 1),
                 "high": round(high[f], 1),
                 "band_bottom": height(low[f]),
-                "band_height": height(high[f] - low[f]),
+                "band_height": height(min(high[f], peak) - low[f]),
                 "median_at": height(median[f]),
                 "below": count is not None and count < low[f],
             }
@@ -250,7 +280,7 @@ def forecast_chart(snapshot: dict | None) -> dict | None:
         "end": snapshot["end"],
         "window": window,
         "actual": sum(c for c in counts[-window:] if c is not None),
-        "expected": round(sum(median)),
+        "expected": round(sum(snapshot.get("mean", median))),
         "low": round(sum(low)),
         "high": round(sum(high)),
         "peak": peak,
@@ -328,7 +358,7 @@ def stats_view(request):
             forecast_day = today - timedelta(days=forecast_days - 1)  # the last days up to today
     forecast_pending = forecast_unavailable = False
     if forecast_view == "last":
-        forecast = forecast_chart(cache.get(FORECAST_CACHE_KEY))
+        result = cache.get(FORECAST_CACHE_KEY)
     else:
         from .tasks import forecast_leads  # tasks imports this module
 
@@ -342,7 +372,8 @@ def stats_view(request):
             forecast_leads.delay(key, forecast_view, forecast_days, campaign, first_day)
         forecast_pending = result is None
         forecast_unavailable = result == {}
-        forecast = forecast_chart(result or None)
+    forecast_short_history = (result or {}).get("short_history")
+    forecast = None if forecast_short_history is not None else forecast_chart(result or None)
 
     series = daily_counts(leads, days, today)
     total = sum(point["count"] for point in series)
@@ -375,6 +406,8 @@ def stats_view(request):
         "forecast_days": forecast_days,
         "forecast_periods": FORECAST_PERIODS,
         "forecast_pending": forecast_pending,
+        "forecast_short_history": forecast_short_history,
+        "forecast_min_days": FORECAST_MIN_DAYS,
         "forecast_unavailable": forecast_unavailable,
         "today": today,
     }

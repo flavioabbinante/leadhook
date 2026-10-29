@@ -81,16 +81,16 @@ def make_destination(**kwargs) -> Destination:
     return Destination.objects.create(**values)
 
 
-def fake_forecaster(median: float, low: float, high: float | None = None) -> mock.Mock:
-    """A Timestral stand-in: every series gets `median`/`low`/`high` spread over the horizon."""
+def fake_forecaster(median: float, low: float) -> mock.Mock:
+    """A Timestral stand-in: every series gets `median` and its 5% quantile `low` spread over
+    the horizon, with quantiles symmetric around the median (so the mean is the median)."""
+    levels = (0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99)
 
     def forecast(context, prediction_length):
-        shape = (len(context), 1, prediction_length)
-
-        def spread(total):
-            return np.full(shape, total / prediction_length)
-
-        quantiles = {0.05: spread(low), 0.95: spread(median * 2 if high is None else high)}
-        return mock.Mock(median=spread(median), quantile=quantiles.__getitem__)
+        per_hour = np.array([median + (q - 0.5) * (median - low) / 0.45 for q in levels])
+        shape = (len(context), 1, prediction_length, len(levels))
+        return mock.Mock(
+            quantiles=np.broadcast_to(per_hour / prediction_length, shape), quantile_levels=levels
+        )
 
     return mock.Mock(forecast=mock.Mock(side_effect=forecast))

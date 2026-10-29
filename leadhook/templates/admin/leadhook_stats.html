@@ -101,6 +101,8 @@
       <p class="lh-empty">Timestral sta calcolando {% if campaign is not None %}la campagna {{ campaign|default:"senza nome" }}, {% endif %}{% if forecast_view == "next" %}i prossimi {{ forecast_days }} giorn{{ forecast_days|pluralize:"o,i" }}{% else %}{{ forecast_days }} giorn{{ forecast_days|pluralize:"o,i" }} dal {{ forecast_day|date:"D j M" }}{% endif %}<span data-elapsed></span>: {% if forecast_view == "next" %}pochi secondi{% else %}fino a un minuto{% endif %}, il riquadro si aggiorna da solo.</p>
     {% elif forecast_unavailable %}
       <p class="lh-empty">Timestral non è disponibile in questa installazione: serve l'immagine Docker, che include il modello.</p>
+    {% elif forecast_short_history is not None %}
+      <p class="lh-empty">Timestral ha bisogno di almeno {{ forecast_min_days }} giorni di lead per previsioni affidabili: lo storico{% if campaign is not None %} di questa campagna{% endif %}{% if forecast_view == "past" %} prima del {{ forecast_day|date:"j M" }}{% endif %} copre {% if forecast_short_history %}{{ forecast_short_history }} giorn{{ forecast_short_history|pluralize:"o,i" }}{% else %}meno di un giorno{% endif %}. Fino ad allora l'avviso «Lead in calo» usa la media delle settimane precedenti.</p>
     {% elif forecast %}
       <p class="lh-card-subtitle">
         {% if campaign is None %}Tutte le campagne{% else %}Campagna: {{ campaign|default:"senza nome" }}{% endif %} ·

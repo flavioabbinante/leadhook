@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest import mock
 
+import numpy as np
 import pytest
 import responses
 from celery.exceptions import Retry
@@ -192,13 +193,15 @@ def test_lead_drop_ignores_normal_and_low_volume(no_forecast):
 
 def test_lead_drop_uses_timestral_forecast():
     now = timezone.now()
+    _leads_at(now - timedelta(days=20), 1, start=200)  # Timestral needs 14 days of history
     _leads_at(now - timedelta(weeks=1, hours=1), 3, start=100)
     _leads_at(now - timedelta(hours=1), 4)
     with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
         forecaster.return_value = fake_forecaster(median=20, low=8)
-        assert lead_drop(now) == (4, 20)
+        assert lead_drop(now) == (4, pytest.approx(20))
         history = forecaster.return_value.forecast.call_args.args[0][0]
-        assert len(history) == 4 * 7 * 24 and history.sum() == 3
+        assert len(history) == 4 * 7 * 24 and np.nansum(history) == 4
+        assert np.isnan(history[: 8 * 24 - 6]).all()  # before the first lead: unknown, not 0
         snapshot = cache.get(FORECAST_CACHE_KEY)  # drawn on the stats page
         assert len(snapshot["counts"]) == 48 and sum(snapshot["counts"][-6:]) == 4
         assert snapshot["median"] == pytest.approx([20 / 6] * 6)
@@ -206,3 +209,12 @@ def test_lead_drop_uses_timestral_forecast():
         assert lead_drop(now) is None  # 4 leads are within the forecast range
         forecaster.return_value = fake_forecaster(median=5, low=5)
         assert lead_drop(now) is None  # under a tight forecast, but not a 70% drop
+
+
+def test_lead_drop_skips_timestral_without_two_weeks_of_history():
+    now = timezone.now()
+    _leads_at(now - timedelta(hours=5), 267)  # a page connected this morning, backlog included
+    with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
+        assert lead_drop(now) is None  # the plain average of empty weeks: no alert
+    forecaster.assert_not_called()
+    assert cache.get(FORECAST_CACHE_KEY) == {"short_history": 0}

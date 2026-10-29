@@ -1,6 +1,8 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest import mock
 
+import numpy as np
+import pytest
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.urls import reverse
@@ -11,6 +13,7 @@ from leadhook.leads.stats import (
     FORECAST_CACHE_KEY,
     daily_counts,
     forecast_cache_key,
+    forecast_chart,
     forecast_next,
     forecast_period,
     period_leads,
@@ -92,28 +95,25 @@ def _received(leadgen_id, at):
     Lead.objects.filter(pk=lead.pk).update(received_at=at)
 
 
-@mock.patch("django.utils.timezone.now", return_value=NOW)
-def test_forecast_period_checks_every_six_hour_block_like_the_hourly_check(_now):
-    now = timezone.now()
-    first_day = timezone.localdate() - timedelta(days=3)
-    start = timezone.make_aware(timezone.datetime.combine(first_day, timezone.datetime.min.time()))
+def test_forecast_period_checks_every_six_hour_block_like_the_hourly_check():
+    # 24-25 October 2026 in Italy: summer time ends on the 25th, a 25-hour day.
+    now = datetime(2026, 10, 27, 12, tzinfo=UTC)
+    first_day = date(2026, 10, 24)
+    start = timezone.make_aware(datetime.combine(first_day, datetime.min.time()))
     for i in range(20):  # the 06-12 block got 20 leads: over 30% of the 60 expected
         _received(f"block-{i}", start + timedelta(hours=7))
     _received("2", start - timedelta(days=7))  # in the history only
+    _received("3", start - timedelta(days=25))  # the first lead: over 14 days of history
     with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
         forecaster.return_value = fake_forecaster(median=60, low=30)
         result = forecast_period(first_day, 2, now)
         histories = forecaster.return_value.forecast.call_args.args[0]
-    end = timezone.make_aware(
-        timezone.datetime.combine(first_day + timedelta(days=2), start.time())
-    )
-    # In UTC: same-zone subtraction ignores the switch from summer time (a 25-hour day).
-    hours = int((end.astimezone(UTC) - start.astimezone(UTC)) / timedelta(hours=1))
+    hours = 49
     blocks = 8  # 00, 06, 12, 18 on the local clock: one is 7 hours long on a 25-hour day
     # One batch: a forecast per block, then one per hourly check, 4 weeks of history each.
     assert histories.shape == (blocks + hours, 4 * 7 * 24)
-    assert forecaster.return_value.forecast.call_args.kwargs["prediction_length"] == hours - 42
-    assert histories[0].sum() == 1 and histories[2].sum() == 21
+    assert forecaster.return_value.forecast.call_args.kwargs["prediction_length"] == 7
+    assert np.nansum(histories[0]) == 2 and np.nansum(histories[2]) == 22
     assert len(result["counts"]) == len(result["median"]) == hours
     assert sum(result["counts"]) == 20
     # The 01:00 check alerts on an empty window; the next ones only after a day of quiet.
@@ -123,6 +123,7 @@ def test_forecast_period_checks_every_six_hour_block_like_the_hourly_check(_now)
 
 def test_forecast_period_stops_at_the_current_hour():
     now = timezone.now()
+    _received("old", now - timedelta(days=20))
     with mock.patch("leadhook.leads.stats._forecaster", return_value=fake_forecaster(6, 2)):
         result = forecast_period(timezone.localdate(), 1, now)
         assert forecast_period(timezone.localdate() + timedelta(days=1), 1, now) is None
@@ -137,7 +138,11 @@ def _run_queued(delay, forecaster):
 
 @mock.patch("django.utils.timezone.now", return_value=NOW)
 def test_stats_page_reviews_a_chosen_period_in_the_background(_now, admin_client):
+    _received("old", timezone.now() - timedelta(days=26))
     day = timezone.localdate() - timedelta(days=5)
+    next_day = timezone.make_aware(datetime.combine(day + timedelta(days=2), datetime.min.time()))
+    first = timezone.make_aware(datetime.combine(day, datetime.min.time()))
+    hours = int((next_day.astimezone(UTC) - first.astimezone(UTC)) / timedelta(hours=1))
     params = {"forecast_view": "past", "forecast_day": day.isoformat(), "forecast_days": 2}
     with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
         content = admin_client.get(URL, params).content.decode()
@@ -149,8 +154,9 @@ def test_stats_page_reviews_a_chosen_period_in_the_background(_now, admin_client
     _run_queued(delay, fake_forecaster(60, 30))
     assert cache.get(f"{key}:pending") is None
     content = admin_client.get(URL, params).content.decode()
-    assert "l'avviso sarebbe partito 2 volte" in content  # at most one a day, as for real
-    assert content.count('class="lh-forecast-band"') == 48
+    alerts = len([h for h in (1, 25, 49) if h <= hours])  # at most one a day, as for real
+    assert f"l'avviso sarebbe partito {alerts} volte" in content
+    assert content.count('class="lh-forecast-band"') == hours
 
     cache.set(key, {})  # no Timestral
     assert "Timestral non è disponibile" in admin_client.get(URL, params).content.decode()
@@ -175,6 +181,7 @@ def test_last_check_view_ignores_the_day(admin_client):
 
 def test_forecast_next_continues_the_last_day_of_leads():
     now = timezone.now()
+    _received("old", now - timedelta(days=20))
     _received("1", now - timedelta(hours=2))
     with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
         forecaster.return_value = fake_forecaster(median=70, low=35)
@@ -186,6 +193,7 @@ def test_forecast_next_continues_the_last_day_of_leads():
 
 
 def test_stats_page_shows_the_next_days(admin_client):
+    _received("old", timezone.now() - timedelta(days=20))
     params = {"forecast_view": "next", "forecast_days": 7}
     with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
         content = admin_client.get(URL, params).content.decode()
@@ -200,14 +208,15 @@ def test_stats_page_shows_the_next_days(admin_client):
 def test_timestral_card_reviews_one_campaign(admin_client):
     now = timezone.now()
     yesterday = timezone.localdate() - timedelta(days=1)
-    _received("autumn", now - timedelta(days=8))
+    _received("autumn", now - timedelta(days=20))
     Lead.objects.update(campaign_name="Autunno")
-    _received("spring", now - timedelta(days=8))
+    _received("spring", now - timedelta(days=20))
     with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
         forecaster.return_value = fake_forecaster(60, 30)
         forecast_period(yesterday, 1, now, campaign="Autunno")
         histories = forecaster.return_value.forecast.call_args.args[0]
-    assert histories.sum() == 4 + 24  # only Autunno's lead, in the history of 4 blocks, 24 checks
+    # Only Autunno's lead, in the history of 4 blocks and 24 checks.
+    assert np.nansum(histories) == 4 + 24
 
     # The hourly check covers all campaigns: "last" turns into the campaign's last days.
     params = {"campaign": "Autunno", "forecast_view": "last", "forecast_days": 2}
@@ -218,3 +227,33 @@ def test_timestral_card_reviews_one_campaign(admin_client):
     _run_queued(delay, fake_forecaster(60, 30))
     content = admin_client.get(URL, params).content.decode()
     assert "Campagna: Autunno ·" in content and "cali da avviso" in content
+
+
+def test_timestral_waits_for_two_weeks_of_history(admin_client):
+    now = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    _received("1", now - timedelta(days=3))
+    with mock.patch("leadhook.leads.stats._forecaster") as forecaster:
+        assert forecast_next(7, now) == {"short_history": 3}
+        past = forecast_period(date(2026, 10, 19), 1, now)
+    forecaster.assert_not_called()
+    assert past == {"short_history": 1}  # up to the period's earliest check, the 18th at 19:00
+
+    Lead.objects.update(received_at=timezone.now() - timedelta(days=3))  # now for the page
+
+    params = {"forecast_view": "next", "forecast_days": 7}
+    with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
+        admin_client.get(URL, params)
+    _run_queued(delay, fake_forecaster(70, 35))
+    content = admin_client.get(URL, params).content.decode()
+    assert "almeno 14 giorni di lead" in content and "copre 3 giorni" in content
+
+
+def test_forecast_chart_cuts_an_exploded_band():
+    end = timezone.now().replace(minute=0, second=0, microsecond=0)
+    snapshot = {"end": end, "counts": [4, 6, None, None], "median": [5.0, 5.0]}
+    snapshot |= {"low": [1.0, 1.0], "high": [9.0, 14000.0], "mean": [5.5, 5.5]}
+    chart = forecast_chart(snapshot)
+    assert chart["peak"] == 18  # 3x the highest seen (6), not 14000
+    assert chart["expected"] == 11  # the mean, not the median
+    future = chart["points"][-1]
+    assert float(future["band_bottom"]) + float(future["band_height"]) == pytest.approx(100)
