@@ -1,4 +1,4 @@
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from django.contrib.auth.models import User
@@ -19,6 +19,9 @@ from leadhook.leads.tasks import forecast_leads
 from tests.factories import fake_forecaster, make_lead
 
 URL = reverse("stats")
+# The tests count days back from "now": pinned so their periods keep (or skip) the 25 October
+# switch from summer time whatever day the suite runs.
+NOW = datetime(2026, 10, 27, 11, 0, tzinfo=UTC)
 
 
 def _lead(leadgen_id, days_ago, campaign="Autunno", **kwargs):
@@ -89,7 +92,8 @@ def _received(leadgen_id, at):
     Lead.objects.filter(pk=lead.pk).update(received_at=at)
 
 
-def test_forecast_period_checks_every_six_hour_block_like_the_hourly_check():
+@mock.patch("django.utils.timezone.now", return_value=NOW)
+def test_forecast_period_checks_every_six_hour_block_like_the_hourly_check(_now):
     now = timezone.now()
     first_day = timezone.localdate() - timedelta(days=3)
     start = timezone.make_aware(timezone.datetime.combine(first_day, timezone.datetime.min.time()))
@@ -131,7 +135,8 @@ def _run_queued(delay, forecaster):
         forecast_leads(*delay.call_args.args)
 
 
-def test_stats_page_reviews_a_chosen_period_in_the_background(admin_client):
+@mock.patch("django.utils.timezone.now", return_value=NOW)
+def test_stats_page_reviews_a_chosen_period_in_the_background(_now, admin_client):
     day = timezone.localdate() - timedelta(days=5)
     params = {"forecast_view": "past", "forecast_day": day.isoformat(), "forecast_days": 2}
     with mock.patch("leadhook.leads.tasks.forecast_leads.delay") as delay:
